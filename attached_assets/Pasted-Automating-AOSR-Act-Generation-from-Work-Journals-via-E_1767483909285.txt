@@ -1,0 +1,86 @@
+Automating AOSR Act Generation from Work Journals via Excel, Telegram, and Word
+Overview
+
+Preparation of Акты освидетельствования скрытых работ (АОСР) – Acts of Inspection for Hidden Works – is a routine but critical task in construction projects. Contractors must produce numerous such acts promptly for various types of work (foundation, waterproofing, etc.) to avoid project delays
+novosibirsk.galaktion.net
+. Each act documents the completion of certain hidden works (those whose quality can’t be verified later) and must include details like the work description, exact location, date, and responsible personnel
+blanker.ru
+. Automating the generation of these acts can significantly streamline project documentation, saving time and reducing errors. This outline describes a system to automatically compile AOSR acts for a selected time period using data from a normalized work journal (log) with an Excel template, triggered by a Telegram bot command, and outputting standardized Word documents.
+
+Input Data Preparation (Excel and Work Journal)
+
+Excel Template and Approved Act Themes: We maintain an Excel-based template that defines the columns and structure for act data. The template includes columns such as № (index), Наименование работ (Name of work), Ед. изм. (Unit of measure), and Количество (Quantity) for recording performed work details. This template is aligned with an approved list of act themes (types of hidden works that require acts) – analogous to a Bill of Quantities (ВОР) in that it pre-defines all work categories that must be documented. The list of act themes (e.g. excavation, foundation, reinforcement, etc.) is loaded into the system to ensure consistency and compliance with regulatory requirements or project standards. Each work entry in the journal is expected to correspond to one of these approved categories.
+
+Normalized Work Journal: The source of truth for the performed works is a normalized work journal (or general work log). This journal contains daily or periodic entries of work done, normalized in terminology to match the approved act themes. Each entry typically records: the work category, the date it was performed, the volume/quantity of work completed, and the location (specific place or structural element). By normalizing the names of works in the log, we ensure they map directly to the act themes in the Excel template. For example, an entry might be: “Rebar installation for foundation slab – 2025-12-10 – 5 tons – Building A”, which corresponds to the “Reinforcement of foundation” act category.
+
+The Excel sheet can be used to aggregate these journal entries per act theme. In practice, a row in the Excel table represents the data for one act (covering one category of hidden work). During setup, all fixed fields (project name, participants, etc.) in a Word act form are filled out once, and the variable fields (work details, dates, etc.) are set up to be populated from the Excel data
+km-kmd.ru
+. We fill the Excel table with the relevant details from the journal for each act theme that occurred. Each row might contain the Name of work (act theme), the date range of that work, the total volume completed in the period, and the location
+blanker.ru
+. This structured table of acts-by-theme serves as the dataset for generating the acts.
+
+Act Generation Process (Grouping by Theme and Date Range)
+
+Triggered for a Selected Period: The generation of acts is initiated on command for a chosen time period. For example, the site supervisor (master) can specify a date range (e.g. a particular week or month), and the system will compile all hidden works performed in that interval. The automation will filter the normalized journal entries to only those whose dates fall within the requested period.
+
+Grouping by Act Theme: Using the approved list of act themes as a guide, the system groups the filtered journal entries by their corresponding act theme. For each theme that has at least one entry in the period, an Act is formed (if no work of that type was done in the period, no act is generated for that category). Each act will gather all instances of that work from the log during the period without duplication – i.e. the work type is listed once per act. If multiple journal entries refer to the same work category, they are combined under one act. Any quantitative values (volumes) from those entries can be summed or otherwise aggregated as needed for the act. This way, one act covers the entire scope of a particular hidden work within the period, instead of repeating the same work multiple times.
+
+Determining Act Dates: The act’s date or date range is determined by the first and last mention of that work in the journal during the period. In other words, the earliest date that work was performed is taken as the start, and the latest date as the end. These dates are used to fill in the act documentation to indicate the timeframe of the work. For instance, if “Waterproofing of foundation pit” entries span from Jan 5 to Jan 12, 2026, the act for that work will note that the work was carried out from 05/01/2026 to 12/01/2026. Using the date range from actual log entries ensures the act accurately reflects when the work happened (and complies with the requirement that hidden works are documented within days of completion
+novosibirsk.galaktion.net
+).
+
+Act Content – Work, Date, Volume, Place: Within each generated act, the content includes the description of the work (the act theme, e.g. “Installation of foundation rebar”), the timeframe (dates) of execution, the volume or quantity completed (e.g. cubic meters of concrete, length of weld, etc.), and the place of work (specific location or structure identifier). These correspond to fields in the act form. According to standards, an AOSR must list the name of the hidden work (with specifics of each part or segment of work) and the exact location of its execution
+blanker.ru
+. Volume or quantity is included as an additional detail to quantify the scope of work (though not always explicitly required by regulations, it is useful for project tracking). All this information is drawn from the journal entries aggregated for that act. If the Word template has placeholders for these fields, they will be filled from the Excel data row for that act during the generation process.
+
+Telegram Bot Integration (Command Trigger & Access Control)
+
+Telegram Command Interface: The system uses a Telegram bot to allow the field engineer (master) to trigger the act generation conveniently. The master can send a specific command (for example, /generate_acts 01.12.2025-31.12.2025) in the Telegram chat with the bot, specifying the desired date range for which to generate acts. Upon receiving this command, the Telegram bot (integrated with our automation workflow) will initiate the data gathering and document assembly process described above. This chat-based interface means the user in the field doesn’t need direct access to Excel or Word – they can simply request the acts via a message on their phone.
+
+Access Control – Only Master User: To ensure security and proper use, only an authorized master (site manager) account is allowed to invoke the act generation. The bot verifies the user’s identity (e.g. by their Telegram user ID or username) against a predefined list of authorized users. If an unauthorized person tries the command, the bot will ignore it or send an access denied message. This approach is commonly recommended for private bots – for example, developers often maintain a list of admin user IDs and check incoming messages against it
+stackoverflow.com
+. In our implementation, the master’s Telegram ID is set in the configuration, and the command handler proceeds only if the message comes from that ID. This prevents accidental or malicious triggers by others and ensures the acts are generated only on legitimate request by the responsible person.
+
+Confirmation and Logs: When the command is executed, the bot can respond with a confirmation that it is compiling the acts for the specified period. It may also provide status updates or a summary of how many acts were generated. This feedback via Telegram ensures the user knows the request is being processed. Any errors (such as if the date range format is wrong or no data is available) can be reported back in the chat for clarity.
+
+Output Document Generation (Word AOSR Forms)
+
+Word Template (Strict AOSR Form): The acts are generated in Microsoft Word format using a pre-approved template that conforms to the official AOSR form requirements. AOSR documents have a strict format defined by regulatory standards (e.g. an approved form per Ministry order №344/пр (2023) in Russia, which updated the construction act forms
+agenerator.ru
+). Our template contains all the constant sections (project details, act number, signatures, etc.) and placeholders for the variable fields like work description, dates, volumes, etc. This template might be a Word .docx with merge fields or a macro-enabled form. Using mail-merge or programmatic filling, the system populates the template with the data for each act. For example, one can use Word’s mail merge feature connected to the Excel file of act data
+km-kmd.ru
+km-kmd.ru
+, or generate the .docx via a script (using a library or Office automation).
+
+Each act theme yields an individual Word document (or a section in a single document, depending on design). The output Word files are named appropriately (e.g. “Act_HiddenWorks_Foundation_Rebar_Jan2026.docx”) and include all required details. They are essentially ready to print and sign. Automating this step ensures consistency – for instance, the official wording and required fields (like naming intermediate works, listing materials, etc.) are all present as per the template, and only the specific details change
+blanker.ru
+blanker.ru
+. This eliminates errors that might occur if each act were filled manually.
+
+Delivery via Telegram: Once the Word documents are generated, the system sends them back to the master through the Telegram bot for convenience. The bot can send the documents as file attachments using Telegram’s sendDocument API method
+docs.n8n.io
+. For example, the bot will upload the .docx file (or a PDF version, if preferred) directly to the chat. The master can then download the file on their device. This immediate delivery is extremely useful on site – the engineer can review or forward the act to stakeholders right from their phone. (In the current implementation, one object’s acts are generated as a single package; for multiple documents, the bot might send them individually or as a compressed archive.)
+
+Example Scenario
+
+For instance, suppose the master sends /generate_acts 01-01-2026 31-01-2026. The bot will confirm the request and retrieve all log entries from January 2026. It finds that in January, “Earthworks excavation” and “Rebar installation” were performed (among others). Using the approved list, it prepares two acts: one for excavation and one for rebar. For the excavation act, it notes the work was done from Jan 3 to Jan 7 (first to last entry in Jan), volume 300 m³, at Location X. For the rebar act, work from Jan 10 to Jan 20, volume 5 tons, at Location Y. The system fills these details into the Word template for the AOSR, producing two documents. The bot then sends these .docx files back to the master in Telegram. The master opens the files, verifies that each contains the correct work name, location, date range, and quantity, along with the standard form text and signature lines. They can then print them out and have them signed by the required parties.
+
+This automated workflow greatly speeds up documentation. Studies and tools in the industry show that filling Word act forms from Excel data can save a lot of time for engineers
+km-kmd.ru
+. In fact, commercial solutions exist that “allow you to fill a table and get a Word act ready for printing”, specifically to help site engineers with executive documentation
+agenerator.ru
+. By integrating such a process with a chat bot interface, we eliminate the need to manually open Excel/Word; the generation is done in one command, and the output is delivered digitally.
+
+Future Improvements and Considerations
+
+Multi-Project Support: Currently, the system handles one project (one construction “object”) at a time – meaning the acts generated pertain only to the single object’s work log. In the future, if a company wants to manage multiple projects with one bot, the command could be extended to specify the project or the system could maintain separate journals. Then, the bot could generate acts for a specified project and period. This would require an additional parameter in the command or separate bot instances per project.
+
+Enhanced Data Capture: At present, the act data comes from a normalized journal which could be maintained manually or via some logging mechanism. This process can be further enhanced by integrating the data capture into the Telegram bot as well. For example, the master might use the bot to record daily work done (possibly even via voice notes that get transcribed to text). Those entries would populate the journal automatically. Indeed, ensuring that entries are “normalized” (match the approved terminology) could be aided by the bot (using predefined options or AI to categorize free-form descriptions). By improving how data enters the system, we ensure the output acts are accurate without additional cleaning.
+
+Template and Regulatory Updates: Regulations and standard forms can change (e.g., new required fields or new types of documentation). The system should allow updating the Word template (or Excel columns) to adapt to any new requirements. The approved list of act themes should also be maintainable – if new categories of hidden work are introduced or an official list (like one derived from building codes or a company’s quality plan) is updated, the list in the system can be refreshed. The flexibility of an Excel-based template is useful here, as minor changes (like correcting a master’s name or formatting) apply to all generated acts at once
+km-kmd.ru
+.
+
+Conclusion: By using an Excel template for data, a Word mail-merge (or programmatic document generation), and a Telegram bot as the user interface, this system enables one-click generation of AOSR acts for a given period. It automates what was once a labor-intensive process of copying log details into dozens of forms, ensuring that “filling out a full set of acts for an entire site is very efficient”
+agenerator.ru
+. The master can obtain ready-to-sign acts in minutes, improving compliance and record-keeping in the construction project while freeing up time to focus on supervision rather than paperwork.

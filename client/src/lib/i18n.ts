@@ -40,7 +40,10 @@ export const translations = {
       code: 'Code',
       description: 'Description',
       unit: 'Unit',
-      quantity: 'Total Quantity'
+      quantity: 'Total Quantity',
+      importExcel: 'Import Excel',
+      importSuccess: 'Imported {count} items successfully',
+      importError: 'Failed to import Excel'
     },
     acts: {
       title: 'Acts (AOSR)',
@@ -76,7 +79,10 @@ export const translations = {
       code: 'Код',
       description: 'Описание',
       unit: 'Ед. изм.',
-      quantity: 'Общий объем'
+      quantity: 'Общий объем',
+      importExcel: 'Импорт Excel',
+      importSuccess: 'Успешно импортировано {count} позиций',
+      importError: 'Ошибка импорта Excel'
     },
     acts: {
       title: 'Акты (АОСР)',

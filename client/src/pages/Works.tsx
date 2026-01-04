@@ -14,10 +14,11 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Loader2 } from "lucide-react";
+import { Plus, Search, Loader2, FileUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useLanguageStore, translations } from "@/lib/i18n";
+import * as XLSX from "xlsx";
 
 export default function Works() {
   const { language } = useLanguageStore();
@@ -27,6 +28,7 @@ export default function Works() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
   const [formData, setFormData] = useState({
     code: "",
@@ -57,6 +59,60 @@ export default function Works() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        let successCount = 0;
+        for (const row of jsonData) {
+          // Attempt to map common column names
+          const code = row.code || row["Код"] || row["Code"];
+          const description = row.description || row["Описание"] || row["Description"];
+          const unit = row.unit || row["Ед. изм."] || row["Unit"] || "m3";
+          const quantityTotal = row.quantityTotal || row["Объем"] || row["Quantity"] || 0;
+
+          if (code && description) {
+            await createWork.mutateAsync({
+              code: String(code),
+              description: String(description),
+              unit: String(unit),
+              quantityTotal: Number(quantityTotal),
+              synonyms: [],
+            });
+            successCount++;
+          }
+        }
+
+        toast({
+          title: language === 'ru' ? "Импорт завершен" : "Import Complete",
+          description: language === 'ru' 
+            ? `Успешно импортировано ${successCount} позиций` 
+            : `Successfully imported ${successCount} items`,
+        });
+        event.target.value = ''; // Reset input
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      toast({
+        title: language === 'ru' ? "Ошибка импорта" : "Import Error",
+        description: language === 'ru' ? "Не удалось обработать файл" : "Failed to process file",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const filteredWorks = works.filter(w => 
     w.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
     w.code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -67,8 +123,8 @@ export default function Works() {
       <Header title={t.title} />
       
       <div className="flex-1 px-4 py-6 pb-24 max-w-md mx-auto w-full">
-        {/* Search & Filter */}
-        <div className="mb-6 sticky top-14 z-30 bg-background/95 backdrop-blur py-2">
+        {/* Search & Actions */}
+        <div className="mb-6 sticky top-14 z-30 bg-background/95 backdrop-blur py-2 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
@@ -77,6 +133,21 @@ export default function Works() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1 gap-2 rounded-xl h-11"
+              disabled={isImporting}
+              asChild
+            >
+              <label className="cursor-pointer">
+                <FileUp className="h-4 w-4" />
+                {isImporting ? (language === 'ru' ? "Загрузка..." : "Importing...") : (language === 'ru' ? "Импорт Excel" : "Import Excel")}
+                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
+              </label>
+            </Button>
           </div>
         </div>
 

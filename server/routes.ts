@@ -22,9 +22,16 @@ export async function registerRoutes(
     res.json(works);
   });
 
-  app.delete(api.works.list.path, async (req, res) => {
-    await storage.clearWorks();
-    res.status(204).end();
+  app.delete("/api/works", async (_req, res) => {
+    try {
+      console.log("Clearing all works from database...");
+      await storage.clearWorks();
+      console.log("Works cleared successfully");
+      return res.status(204).send();
+    } catch (err) {
+      console.error("Error clearing works:", err);
+      return res.status(500).json({ message: "Failed to clear works" });
+    }
   });
 
   app.post(api.works.create.path, async (req, res) => {

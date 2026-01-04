@@ -67,56 +67,79 @@ export default function Works() {
     try {
       // Clear existing works first (temporary debugging measure)
       const { apiRequest } = await import("@/lib/queryClient");
-      await apiRequest("DELETE", "/api/works");
+      try {
+        await apiRequest("DELETE", "/api/works");
+        console.log("Successfully cleared existing works");
+      } catch (clearError) {
+        console.error("Failed to clear works before import:", clearError);
+        // Continue anyway
+      }
 
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          // Header: 1 to get raw array of arrays
+          const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-        let successCount = 0;
-        for (const row of jsonData) {
-          // Mapping based on the provided 7-column BoQ format (ВОР)
-          // Column 1 (№): row["№"] or row["__EMPTY"] if no header
-          // Column 3 (Наименование работ): row["Наименование работ"] or row["__EMPTY_2"]
-          // Column 4 (Ед. изм.): row["Ед. изм."] or row["__EMPTY_3"]
-          // Column 5 (Кол-во): row["Кол-во"] or row["__EMPTY_4"]
+          console.log("Starting import of rows:", jsonRaw.length);
 
-          const code = row["№"] || row["__EMPTY"];
-          const description = row["Наименование работ"] || row["__EMPTY_2"];
-          const unit = row["Ед. изм."] || row["__EMPTY_3"];
-          const quantityTotal = row["Кол-во"] || row["__EMPTY_4"];
+          let successCount = 0;
+          for (const row of jsonRaw) {
+            // Mapping based on the provided 7-column BoQ format (ВОР)
+            // Column 1 (№): row[0]
+            // Column 3 (Наименование работ): row[2]
+            // Column 4 (Ед. изм.): row[3]
+            // Column 5 (Кол-во): row[4]
 
-          // Only import rows that have both a code (index) and a description
-          // and where code is a number (to ignore header/subheader rows)
-          if (code && description && !isNaN(Number(code))) {
-            await createWork.mutateAsync({
-              code: String(code),
-              description: String(description),
-              unit: String(unit || ""),
-              quantityTotal: String(quantityTotal || "0"),
-              synonyms: [],
-            });
-            successCount++;
+            const code = row[0];
+            const description = row[2];
+            const unit = row[3];
+            const quantityTotal = row[4];
+
+            const numericCode = Number(code);
+            // Check if code is present and description is present
+            // We allow non-numeric codes if they look like strings but prioritize numeric ones
+            // Actually, the user's logic was to check !isNaN(Number(code))
+            if (code && description && !isNaN(numericCode)) {
+              await createWork.mutateAsync({
+                code: String(code),
+                description: String(description),
+                unit: String(unit || ""),
+                quantityTotal: String(quantityTotal || "0"),
+                synonyms: [],
+              });
+              successCount++;
+            }
           }
-        }
 
-        toast({
-          title: language === 'ru' ? "Импорт завершен" : "Import Complete",
-          description: language === 'ru' 
-            ? `Успешно импортировано ${successCount} позиций` 
-            : `Successfully imported ${successCount} items`,
-        });
-        event.target.value = ''; // Reset input
+          console.log("Import finished. Success count:", successCount);
+
+          toast({
+            title: language === 'ru' ? "Импорт завершен" : "Import Complete",
+            description: language === 'ru' 
+              ? `Успешно импортировано ${successCount} позиций` 
+              : `Successfully imported ${successCount} items`,
+          });
+          event.target.value = ''; // Reset input
+        } catch (error) {
+          console.error("Error processing file data:", error);
+          toast({
+            title: language === 'ru' ? "Ошибка импорта" : "Import Error",
+            description: language === 'ru' ? "Не удалось обработать данные файла" : "Failed to process file data",
+            variant: "destructive",
+          });
+        }
       };
       reader.readAsArrayBuffer(file);
     } catch (error) {
+      console.error("Error in handleFileUpload:", error);
       toast({
         title: language === 'ru' ? "Ошибка импорта" : "Import Error",
-        description: language === 'ru' ? "Не удалось обработать файл" : "Failed to process file",
+        description: language === 'ru' ? "Произошла ошибка при подготовке импорта" : "An error occurred during import preparation",
         variant: "destructive",
       });
     } finally {

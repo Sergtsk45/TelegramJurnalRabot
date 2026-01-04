@@ -13,8 +13,12 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { useLanguageStore, translations } from "@/lib/i18n";
+import { ru, enUS } from "date-fns/locale";
 
 export default function Acts() {
+  const { language } = useLanguageStore();
+  const t = translations[language].acts;
   const { data: acts = [], isLoading } = useActs();
   const generateAct = useGenerateAct();
   const { toast } = useToast();
@@ -31,15 +35,22 @@ export default function Acts() {
         dateEnd: format(date, 'yyyy-MM-dd'),
       });
       setIsDialogOpen(false);
-      toast({ title: "Success", description: "AOSR Act generated successfully" });
+      toast({ 
+        title: language === 'ru' ? "Успех" : "Success", 
+        description: language === 'ru' ? "Акт АОСР успешно создан" : "AOSR Act generated successfully" 
+      });
     } catch (error) {
-      toast({ title: "Error", description: "Failed to generate act", variant: "destructive" });
+      toast({ 
+        title: language === 'ru' ? "Ошибка" : "Error", 
+        description: language === 'ru' ? "Не удалось создать акт" : "Failed to generate act", 
+        variant: "destructive" 
+      });
     }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header title="Executive Acts" />
+      <Header title={t.title} />
       
       <div className="flex-1 px-4 py-6 pb-24 max-w-md mx-auto w-full">
         {isLoading ? (
@@ -54,8 +65,10 @@ export default function Acts() {
                   <FileText className="h-10 w-10 text-muted-foreground/50" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-semibold text-lg">No Acts Yet</h3>
-                  <p className="text-sm text-muted-foreground max-w-[200px] mx-auto">Generate your first AOSR document based on logged work.</p>
+                  <h3 className="font-semibold text-lg">{language === 'ru' ? "Нет актов" : "No Acts Yet"}</h3>
+                  <p className="text-sm text-muted-foreground max-w-[200px] mx-auto">
+                    {language === 'ru' ? "Создайте первый АОСР на основе записей работ." : "Generate your first AOSR document based on logged work."}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -73,9 +86,9 @@ export default function Acts() {
                           <FileText className="h-5 w-5" />
                         </div>
                         <div>
-                          <CardTitle className="text-base">Act #{act.id}</CardTitle>
+                          <CardTitle className="text-base">{language === 'ru' ? "Акт №" : "Act #"}{act.id}</CardTitle>
                           <CardDescription className="text-xs">
-                            {act.dateStart ? format(new Date(act.dateStart), "MMM d, yyyy") : "No date"}
+                            {act.dateStart ? format(new Date(act.dateStart), "MMM d, yyyy", { locale: language === 'ru' ? ru : enUS }) : "No date"}
                           </CardDescription>
                         </div>
                       </div>
@@ -86,10 +99,10 @@ export default function Acts() {
                     <CardContent className="p-4 pt-2">
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-xs text-muted-foreground">
-                          {act.worksData?.length || 0} work items
+                          {act.worksData?.length || 0} {language === 'ru' ? "работ" : "work items"}
                         </span>
                         <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 group-hover:text-primary">
-                          Download <Download className="h-3 w-3" />
+                          {language === 'ru' ? "Скачать" : "Download"} <Download className="h-3 w-3" />
                         </Button>
                       </div>
                     </CardContent>
@@ -106,16 +119,16 @@ export default function Acts() {
           <DialogTrigger asChild>
             <Button className="h-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 pl-5 pr-6 gap-2">
               <Plus className="h-5 w-5" />
-              <span className="font-semibold">Generate Act</span>
+              <span className="font-semibold">{t.generate}</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md rounded-2xl">
             <DialogHeader>
-              <DialogTitle>Generate AOSR</DialogTitle>
+              <DialogTitle>{t.generate}</DialogTitle>
             </DialogHeader>
             <div className="py-6 space-y-4">
               <div className="grid gap-2">
-                <label className="text-sm font-medium">Select Date</label>
+                <label className="text-sm font-medium">{language === 'ru' ? "Выберите дату" : "Select Date"}</label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -126,7 +139,7 @@ export default function Acts() {
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "PPP") : <span>Pick a date</span>}
+                      {date ? format(date, "PPP", { locale: language === 'ru' ? ru : enUS }) : <span>{language === 'ru' ? "Выберите дату" : "Pick a date"}</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -135,6 +148,7 @@ export default function Acts() {
                       selected={date}
                       onSelect={setDate}
                       initialFocus
+                      locale={language === 'ru' ? ru : enUS}
                     />
                   </PopoverContent>
                 </Popover>
@@ -144,7 +158,7 @@ export default function Acts() {
                 className="w-full h-12 rounded-xl"
                 disabled={!date || generateAct.isPending}
               >
-                {generateAct.isPending ? "Generating..." : "Generate Document"}
+                {generateAct.isPending ? (language === 'ru' ? "Создание..." : "Generating...") : (language === 'ru' ? "Создать документ" : "Generate Document")}
               </Button>
             </div>
           </DialogContent>

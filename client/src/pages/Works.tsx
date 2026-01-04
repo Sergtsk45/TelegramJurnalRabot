@@ -17,8 +17,11 @@ import { Label } from "@/components/ui/label";
 import { Plus, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { useLanguageStore, translations } from "@/lib/i18n";
 
 export default function Works() {
+  const { language } = useLanguageStore();
+  const t = translations[language].works;
   const { data: works = [], isLoading } = useWorks();
   const createWork = useCreateWork();
   const { toast } = useToast();
@@ -41,9 +44,16 @@ export default function Works() {
       });
       setIsDialogOpen(false);
       setFormData({ code: "", description: "", unit: "m3", quantityTotal: "" });
-      toast({ title: "Success", description: "Work item added to BoQ" });
+      toast({ 
+        title: language === 'ru' ? "Успех" : "Success", 
+        description: language === 'ru' ? "Работа добавлена в ВОИР" : "Work item added to BoQ" 
+      });
     } catch (error) {
-      toast({ title: "Error", description: "Failed to create work item", variant: "destructive" });
+      toast({ 
+        title: language === 'ru' ? "Ошибка" : "Error", 
+        description: language === 'ru' ? "Не удалось добавить работу" : "Failed to create work item", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -54,7 +64,7 @@ export default function Works() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header title="Bill of Quantities" />
+      <Header title={t.title} />
       
       <div className="flex-1 px-4 py-6 pb-24 max-w-md mx-auto w-full">
         {/* Search & Filter */}
@@ -62,7 +72,7 @@ export default function Works() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Search works..." 
+              placeholder={language === 'ru' ? "Поиск работ..." : "Search works..."} 
               className="pl-9 rounded-xl bg-secondary/50 border-transparent focus:bg-background transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -74,7 +84,7 @@ export default function Works() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading BoQ...</p>
+            <p className="text-sm text-muted-foreground">{language === 'ru' ? "Загрузка ВОИР..." : "Loading BoQ..."}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -91,7 +101,7 @@ export default function Works() {
             
             {filteredWorks.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
-                <p>No work items found.</p>
+                <p>{language === 'ru' ? "Работы не найдены." : "No work items found."}</p>
               </div>
             )}
           </div>
@@ -108,12 +118,12 @@ export default function Works() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-md rounded-2xl">
             <DialogHeader>
-              <DialogTitle>Add Work Item</DialogTitle>
-              <DialogDescription>Add a new item to the Bill of Quantities.</DialogDescription>
+              <DialogTitle>{language === 'ru' ? "Добавить работу" : "Add Work Item"}</DialogTitle>
+              <DialogDescription>{language === 'ru' ? "Добавьте новую позицию в ведомость объемов." : "Add a new item to the Bill of Quantities."}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="code">Work Code</Label>
+                <Label htmlFor="code">{t.code}</Label>
                 <Input 
                   id="code" 
                   placeholder="e.g. 3.1.2" 
@@ -122,17 +132,17 @@ export default function Works() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="desc">Description</Label>
+                <Label htmlFor="desc">{t.description}</Label>
                 <Input 
                   id="desc" 
-                  placeholder="Concrete works..." 
+                  placeholder="..." 
                   value={formData.description}
                   onChange={e => setFormData({...formData, description: e.target.value})}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="unit">Unit</Label>
+                  <Label htmlFor="unit">{t.unit}</Label>
                   <Input 
                     id="unit" 
                     placeholder="m3" 
@@ -141,7 +151,7 @@ export default function Works() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="qty">Total Quantity</Label>
+                  <Label htmlFor="qty">{t.quantity}</Label>
                   <Input 
                     id="qty" 
                     type="number" 
@@ -157,7 +167,7 @@ export default function Works() {
               disabled={createWork.isPending || !formData.code || !formData.description}
               className="w-full h-12 rounded-xl text-base"
             >
-              {createWork.isPending ? "Adding..." : "Add Item"}
+              {createWork.isPending ? (language === 'ru' ? "Добавление..." : "Adding...") : (language === 'ru' ? "Добавить" : "Add Item")}
             </Button>
           </DialogContent>
         </Dialog>

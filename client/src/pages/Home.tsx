@@ -9,8 +9,11 @@ import { MessageBubble } from "@/components/MessageBubble";
 import { Send, Mic, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLanguageStore, translations } from "@/lib/i18n";
 
 export default function Home() {
+  const { language } = useLanguageStore();
+  const t = translations[language].home;
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { data: messages = [], isLoading } = useMessages();
@@ -49,8 +52,8 @@ export default function Home() {
       
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to send message",
+        title: language === 'ru' ? "Ошибка" : "Error",
+        description: language === 'ru' ? "Не удалось отправить сообщение" : "Failed to send message",
         variant: "destructive",
       });
     }
@@ -58,7 +61,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header title="Daily Work Log" />
+      <Header title={t.title} />
       
       <ScrollArea ref={scrollRef} className="flex-1 px-4 py-6 mb-20">
         <div className="max-w-md mx-auto min-h-[calc(100vh-12rem)] flex flex-col justify-end">
@@ -71,8 +74,7 @@ export default function Home() {
               <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Mic className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="font-semibold text-lg">No logs yet</h3>
-              <p className="text-sm text-muted-foreground mt-1">Tap the microphone or type to log completed work.</p>
+              <h3 className="font-semibold text-lg">{t.noMessages}</h3>
             </div>
           ) : (
             <AnimatePresence initial={false}>
@@ -95,7 +97,7 @@ export default function Home() {
         <form onSubmit={handleSubmit} className="max-w-md mx-auto flex gap-2 items-end">
           <div className="relative flex-1">
             <Textarea 
-              placeholder="E.g., Poured concrete for foundation, 25m3..." 
+              placeholder={t.placeholder} 
               className="resize-none min-h-[52px] max-h-[120px] pr-10 rounded-2xl border-border/50 shadow-sm focus-visible:ring-primary/20 bg-background"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}

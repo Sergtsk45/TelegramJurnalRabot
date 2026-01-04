@@ -11,6 +11,7 @@ export interface IStorage {
   getWorks(): Promise<Work[]>;
   createWork(work: InsertWork): Promise<Work>;
   getWorkByCode(code: string): Promise<Work | undefined>;
+  clearWorks(): Promise<void>;
 
   // Messages
   getMessages(): Promise<Message[]>;
@@ -40,6 +41,10 @@ export class DatabaseStorage implements IStorage {
   async getWorkByCode(code: string): Promise<Work | undefined> {
     const [work] = await db.select().from(works).where(eq(works.code, code));
     return work;
+  }
+
+  async clearWorks(): Promise<void> {
+    await db.delete(works);
   }
 
   async getMessages(): Promise<Message[]> {

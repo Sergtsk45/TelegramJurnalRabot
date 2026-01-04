@@ -65,6 +65,10 @@ export default function Works() {
 
     setIsImporting(true);
     try {
+      // Clear existing works first (temporary debugging measure)
+      const { apiRequest } = await import("@/lib/queryClient");
+      await apiRequest("DELETE", "/api/works");
+
       const reader = new FileReader();
       reader.onload = async (e) => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);

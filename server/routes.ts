@@ -22,6 +22,11 @@ export async function registerRoutes(
     res.json(works);
   });
 
+  app.delete(api.works.list.path, async (req, res) => {
+    await storage.clearWorks();
+    res.status(204).end();
+  });
+
   app.post(api.works.create.path, async (req, res) => {
     try {
       const input = api.works.create.input.parse(req.body);

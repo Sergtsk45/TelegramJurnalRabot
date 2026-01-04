@@ -75,18 +75,25 @@ export default function Works() {
 
         let successCount = 0;
         for (const row of jsonData) {
-          // Attempt to map common column names
-          const code = row.code || row["Код"] || row["Code"];
-          const description = row.description || row["Описание"] || row["Description"];
-          const unit = row.unit || row["Ед. изм."] || row["Unit"] || "m3";
-          const quantityTotal = row.quantityTotal || row["Объем"] || row["Quantity"] || 0;
+          // Mapping based on the provided 7-column BoQ format (ВОР)
+          // Column 1 (№): row["№"] or row["__EMPTY"] if no header
+          // Column 3 (Наименование работ): row["Наименование работ"] or row["__EMPTY_2"]
+          // Column 4 (Ед. изм.): row["Ед. изм."] or row["__EMPTY_3"]
+          // Column 5 (Кол-во): row["Кол-во"] or row["__EMPTY_4"]
 
-          if (code && description) {
+          const code = row["№"] || row["__EMPTY"];
+          const description = row["Наименование работ"] || row["__EMPTY_2"];
+          const unit = row["Ед. изм."] || row["__EMPTY_3"];
+          const quantityTotal = row["Кол-во"] || row["__EMPTY_4"];
+
+          // Only import rows that have both a code (index) and a description
+          // and where code is a number (to ignore header/subheader rows)
+          if (code && description && !isNaN(Number(code))) {
             await createWork.mutateAsync({
               code: String(code),
               description: String(description),
-              unit: String(unit),
-              quantityTotal: Number(quantityTotal),
+              unit: String(unit || ""),
+              quantityTotal: Number(quantityTotal) || 0,
               synonyms: [],
             });
             successCount++;

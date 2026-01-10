@@ -27,6 +27,9 @@ export const messages = pgTable("messages", {
     unit?: string;
     date?: string;
     location?: string;
+    workConditions?: string;
+    materials?: string[];
+    representative?: string;
   }>(),
   createdAt: timestamp("created_at").defaultNow(),
   isProcessed: boolean("is_processed").default(false),

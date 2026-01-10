@@ -23,6 +23,12 @@ export default function Home() {
 
   const currentUser = "user_123"; // Mock user ID
 
+  const sortedMessages = [...messages].sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateA - dateB;
+  });
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
@@ -69,7 +75,7 @@ export default function Home() {
             <div className="flex justify-center items-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
             </div>
-          ) : messages.length === 0 ? (
+          ) : sortedMessages.length === 0 ? (
             <div className="text-center py-20 opacity-50">
               <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Mic className="h-8 w-8 text-muted-foreground" />
@@ -78,7 +84,7 @@ export default function Home() {
             </div>
           ) : (
             <AnimatePresence initial={false}>
-              {messages.map((msg) => (
+              {sortedMessages.map((msg) => (
                 <motion.div
                   key={msg.id}
                   initial={{ opacity: 0, y: 20 }}

@@ -78,58 +78,39 @@ export default function WorkLog() {
       
       <div className="flex-1 flex flex-col pb-20 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <div className="px-2 pt-2 border-b overflow-x-auto">
-            <TabsList className="w-full justify-start gap-0 h-auto p-0 bg-transparent" data-testid="worklog-tabs">
-              <TabsTrigger 
-                value="title" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-xs"
-                data-testid="tab-title"
-              >
-                {t.tabs.title}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="section1" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-xs"
-                data-testid="tab-section1"
-              >
-                {t.tabs.section1}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="section2" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-xs"
-                data-testid="tab-section2"
-              >
-                {t.tabs.section2}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="section3" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-xs"
-                data-testid="tab-section3"
-              >
-                {t.tabs.section3}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="section4" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-xs"
-                data-testid="tab-section4"
-              >
-                {t.tabs.section4}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="section5" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-xs"
-                data-testid="tab-section5"
-              >
-                {t.tabs.section5}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="section6" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-xs"
-                data-testid="tab-section6"
-              >
-                {t.tabs.section6}
-              </TabsTrigger>
-            </TabsList>
+          <div className="py-3 border-b">
+            <div 
+              className="flex gap-2 overflow-x-auto px-3 pb-1 scrollbar-hide"
+              style={{ scrollSnapType: 'x mandatory' }}
+              data-testid="worklog-tabs"
+            >
+              {[
+                { value: 'title', label: t.tabs.title },
+                { value: 'section1', label: t.tabs.section1 },
+                { value: 'section2', label: t.tabs.section2 },
+                { value: 'section3', label: t.tabs.section3 },
+                { value: 'section4', label: t.tabs.section4 },
+                { value: 'section5', label: t.tabs.section5 },
+                { value: 'section6', label: t.tabs.section6 },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setActiveTab(tab.value)}
+                  className={cn(
+                    "flex-shrink-0 w-20 h-20 rounded-md border-2 flex items-center justify-center text-center text-xs font-medium transition-all",
+                    "hover-elevate active-elevate-2",
+                    activeTab === tab.value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/50"
+                  )}
+                  style={{ scrollSnapAlign: 'start' }}
+                  data-testid={`tab-${tab.value}`}
+                >
+                  <span className="px-1 leading-tight">{tab.label}</span>
+                </button>
+              ))}
+              <div className="flex-shrink-0 w-4" aria-hidden="true" />
+            </div>
           </div>
 
           <TabsContent value="title" className="flex-1 m-0 overflow-hidden">

@@ -47,6 +47,14 @@ The backend serves both the API and static files. In development, Vite middlewar
 4. Normalized data stored back on message record
 5. Acts aggregate processed messages by date range and work type
 
+### General Work Log (Общий журнал работ)
+- **Standard**: RD-11-05-2007 Section 5 (Сведения о строительном контроле)
+- **Location**: `/worklog` route, accessible via ЖР tab in bottom navigation
+- **Data Source**: Displays all messages from the database (both processed and pending)
+- **Table Columns**: №, Date, Work Description (with work code badge), Quantity, Unit, Location, Status
+- **Status Indicators**: Green checkmark (processed), Yellow clock (pending)
+- **Traceability**: Shows pending messages in italic with raw text, ensuring full visibility of all logged work
+
 ### Shared Code Pattern
 The `shared/` directory contains code used by both frontend and backend:
 - `schema.ts`: Database table definitions and Zod schemas

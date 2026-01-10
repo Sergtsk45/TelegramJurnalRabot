@@ -61,6 +61,15 @@ The `shared/` directory contains code used by both frontend and backend:
 ### Database
 - **PostgreSQL**: Primary data store. Connection via `DATABASE_URL` environment variable. Schema managed with Drizzle Kit (`db:push` command).
 
+### PDF Generation
+- **Library**: pdfmake for server-side PDF generation
+- **Fonts**: Roboto font family stored in `server/fonts/`
+- **Templates**: 28 AOSR templates across 6 categories in `server/templates/aosr/templates-catalog.json`
+- **Output**: Generated PDFs stored temporarily in `generated_pdfs/` (gitignored)
+- **API**: `POST /api/acts/:id/export` generates PDF documents for selected templates
+
+**Important**: The pdfmake PdfPrinter class must be imported via `require("pdfmake/js/Printer.js").default` due to the module's export structure. Using the standard `require("pdfmake")` returns a singleton instance, not the constructor.
+
 ### Key npm Packages
 - `drizzle-orm` / `drizzle-zod`: Database ORM and schema validation
 - `@tanstack/react-query`: Server state management
@@ -68,6 +77,7 @@ The `shared/` directory contains code used by both frontend and backend:
 - `framer-motion`: Animation library
 - `zod`: Runtime type validation
 - `openai`: OpenAI API client
+- `pdfmake`: Server-side PDF generation
 - Full shadcn/ui component suite via Radix UI primitives
 
 ### Build & Development

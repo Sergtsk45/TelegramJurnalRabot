@@ -259,7 +259,7 @@ export default function Acts() {
                           {dateStart ? format(dateStart, "dd.MM.yy", { locale: language === "ru" ? ru : enUS }) : <span>{language === "ru" ? "Выбрать" : "Select"}</span>}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0 z-[100]" align="start">
                         <Calendar mode="single" selected={dateStart} onSelect={setDateStart} initialFocus locale={language === "ru" ? ru : enUS} />
                       </PopoverContent>
                     </Popover>
@@ -273,7 +273,7 @@ export default function Acts() {
                           {dateEnd ? format(dateEnd, "dd.MM.yy", { locale: language === "ru" ? ru : enUS }) : <span>{language === "ru" ? "Выбрать" : "Select"}</span>}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0 z-[100]" align="start">
                         <Calendar mode="single" selected={dateEnd} onSelect={setDateEnd} initialFocus locale={language === "ru" ? ru : enUS} />
                       </PopoverContent>
                     </Popover>

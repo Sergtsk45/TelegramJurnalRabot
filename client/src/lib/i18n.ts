@@ -85,6 +85,17 @@ export const translations = {
         transferDate: 'Date of transfer to the developer or customer of the journal',
         signature: 'Signature of the authorized representative of the developer or technical customer, person responsible for operation of the building, structure, and (or) regional operator'
       },
+      section4: {
+        title: 'SECTION 4',
+        subtitle: 'Information on construction control during construction, reconstruction, major repairs of capital construction facility',
+        rowNumber: 'No.',
+        controlInfo: 'Information on construction control during construction, reconstruction, major repairs of capital construction facility',
+        defects: 'Identified defects',
+        defectDeadline: 'Deadline for elimination of identified defects',
+        controlSignature: 'Position (if any), surname, initials, signature of authorized representative of developer or technical customer, person responsible for operation of building, structure, and (or) regional operator on construction control matters',
+        defectFixDate: 'Date of defect elimination',
+        fixSignature: 'Position (if any), surname, initials, signature of authorized representative of developer or technical customer, person responsible for operation of building, structure, and (or) regional operator on construction control matters'
+      },
       section3: {
         title: 'SECTION 3',
         subtitle: 'Information on work performed during construction, reconstruction, major repairs of capital construction facility',
@@ -169,6 +180,17 @@ export const translations = {
         personInfo: 'Полное и (или) сокращенное наименование или фамилия, имя, отчество (при наличии) лица, осуществляющего строительство, реконструкцию, капитальный ремонт (лица, осуществляющего подготовку проектной документации), ведущих журнал, их уполномоченных представителей с указанием должности (при наличии), фамилии, инициалов',
         transferDate: 'Дата передачи застройщику или заказчику журнала',
         signature: 'Подпись уполномоченного представителя застройщика или технического заказчика, лица, ответственного за эксплуатацию здания, сооружения, и (или) регионального оператора'
+      },
+      section4: {
+        title: 'РАЗДЕЛ 4',
+        subtitle: 'Сведения о строительном контроле в процессе строительства, реконструкции, капитального ремонта объекта капитального строительства',
+        rowNumber: '№ п/п',
+        controlInfo: 'Сведения о проведении строительного контроля при строительстве, реконструкции, капитальном ремонте объекта капитального строительства',
+        defects: 'Выявленные недостатки',
+        defectDeadline: 'Срок устранения выявленных недостатков',
+        controlSignature: 'Должность (при наличии), фамилия, инициалы, подпись уполномоченного представителя застройщика или технического заказчика, лица, ответственного за эксплуатацию здания, сооружения, и (или) регионального оператора по вопросам строительного контроля',
+        defectFixDate: 'Дата устранения недостатков',
+        fixSignature: 'Должность (при наличии), фамилия, инициалы, подпись уполномоченного представителя застройщика или технического заказчика, лица, ответственного за эксплуатацию здания, сооружения, и(или) регионального оператора по вопросам строительного контроля'
       },
       section3: {
         title: 'РАЗДЕЛ 3',

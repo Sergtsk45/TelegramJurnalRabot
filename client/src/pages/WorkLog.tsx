@@ -391,8 +391,87 @@ export default function WorkLog() {
           </TabsContent>
 
           <TabsContent value="section4" className="flex-1 m-0 overflow-hidden">
-            <ScrollArea className="h-full px-2 py-4">
-              <PlaceholderSection title={t.tabs.section4} comingSoon={t.comingSoon} />
+            <ScrollArea className="h-full px-2 py-2">
+              <div className="max-w-6xl mx-auto">
+                <div className="text-center mb-4">
+                  <h2 className="text-lg font-bold mb-2">{t.section4.title}</h2>
+                  <p className="text-sm text-muted-foreground leading-tight px-2">
+                    {t.section4.subtitle}
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto border-2 border-foreground">
+                  <table className="w-full border-collapse text-sm" data-testid="section4-table">
+                    <thead>
+                      <tr>
+                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top w-10 italic">
+                          {t.section4.rowNumber}
+                        </th>
+                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
+                          {t.section4.controlInfo}
+                        </th>
+                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
+                          {t.section4.defects}
+                        </th>
+                        <th className="border border-foreground px-1 py-2 text-xs font-normal text-center align-top w-12 italic">
+                          <div className="writing-vertical-rl transform rotate-180 h-32 flex items-center justify-center">
+                            {t.section4.defectDeadline}
+                          </div>
+                        </th>
+                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
+                          {t.section4.controlSignature}
+                        </th>
+                        <th className="border border-foreground px-1 py-2 text-xs font-normal text-center align-top w-12 italic">
+                          <div className="writing-vertical-rl transform rotate-180 h-32 flex items-center justify-center">
+                            {t.section4.defectFixDate}
+                          </div>
+                        </th>
+                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
+                          {t.section4.fixSignature}
+                        </th>
+                      </tr>
+                      <tr>
+                        <th className="border border-foreground px-1 py-1 text-xs font-normal text-center italic">1</th>
+                        <th className="border border-foreground px-1 py-1 text-xs font-normal text-center italic">2</th>
+                        <th className="border border-foreground px-1 py-1 text-xs font-normal text-center italic">3</th>
+                        <th className="border border-foreground px-1 py-1 text-xs font-normal text-center italic">4</th>
+                        <th className="border border-foreground px-1 py-1 text-xs font-normal text-center italic">5</th>
+                        <th className="border border-foreground px-1 py-1 text-xs font-normal text-center italic">6</th>
+                        <th className="border border-foreground px-1 py-1 text-xs font-normal text-center italic">7</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="border border-foreground px-2 py-6 text-center align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-foreground px-2 py-6 text-center align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-foreground px-2 py-6 text-center align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                        <td className="border border-foreground px-2 py-6 align-top">&nbsp;</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </ScrollArea>
           </TabsContent>
 

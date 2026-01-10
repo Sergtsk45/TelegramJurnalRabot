@@ -4,6 +4,9 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
+import { generateAosrPdf, loadTemplateCatalog, type ActData } from "./pdfGenerator";
+import * as fs from "fs";
+import * as path from "path";
 
 // Initialize OpenAI client - it will use the environment variables from the integration
 const openai = new OpenAI({
@@ -142,7 +145,8 @@ export async function registerRoutes(
       });
 
       const worksData = [];
-      for (const [code, quantity] of worksMap.entries()) {
+      for (const entry of Array.from(worksMap.entries())) {
+        const [code, quantity] = entry;
         const work = await storage.getWorkByCode(code);
         if (work) {
           worksData.push({
@@ -179,6 +183,163 @@ export async function registerRoutes(
     res.json({ ...act, attachments });
   });
 
+  // Act Templates
+  app.get("/api/act-templates", async (_req, res) => {
+    try {
+      const templates = await storage.getActTemplates();
+      
+      // If no templates in DB, load from catalog file
+      if (templates.length === 0) {
+        const catalog = loadTemplateCatalog();
+        const templatesData = catalog.templates.map((t: any) => ({
+          templateId: t.id,
+          code: t.code,
+          category: t.category,
+          title: t.title,
+          titleEn: t.titleEn,
+          description: t.description,
+          normativeRef: t.normativeRef,
+          isActive: true,
+        }));
+        await storage.seedActTemplates(templatesData);
+        const seeded = await storage.getActTemplates();
+        return res.json({ templates: seeded, categories: catalog.categories });
+      }
+      
+      const catalog = loadTemplateCatalog();
+      res.json({ templates, categories: catalog.categories });
+    } catch (err) {
+      console.error("Error fetching act templates:", err);
+      res.status(500).json({ message: "Failed to load templates" });
+    }
+  });
+
+  // Generate PDF for act
+  app.post("/api/acts/:id/export", async (req, res) => {
+    try {
+      const actId = Number(req.params.id);
+      const act = await storage.getAct(actId);
+      if (!act) {
+        return res.status(404).json({ message: "Act not found" });
+      }
+
+      const { templateIds, formData } = req.body;
+
+      if (!templateIds || !Array.isArray(templateIds) || templateIds.length === 0) {
+        return res.status(400).json({ message: "No templates selected" });
+      }
+
+      // Ensure generated PDFs directory exists
+      const pdfDir = path.join(process.cwd(), "generated_pdfs");
+      if (!fs.existsSync(pdfDir)) {
+        fs.mkdirSync(pdfDir, { recursive: true });
+      }
+
+      const generatedFiles: { templateId: string; filename: string; url: string }[] = [];
+
+      for (const templateId of templateIds) {
+        const template = await storage.getActTemplateByTemplateId(templateId);
+        if (!template) continue;
+
+        // Build act data from form and database
+        const actData: ActData = {
+          actNumber: formData?.actNumber || `${act.id}`,
+          actDate: formData?.actDate || new Date().toISOString().split("T")[0],
+          city: formData?.city || "Москва",
+          objectName: formData?.objectName || "Объект строительства",
+          objectAddress: formData?.objectAddress || act.location || "Адрес объекта",
+          developerRepName: formData?.developerRepName || "Иванов И.И.",
+          developerRepPosition: formData?.developerRepPosition || "Главный инженер",
+          contractorRepName: formData?.contractorRepName || "Петров П.П.",
+          contractorRepPosition: formData?.contractorRepPosition || "Прораб",
+          supervisorRepName: formData?.supervisorRepName || "Сидоров С.С.",
+          supervisorRepPosition: formData?.supervisorRepPosition || "Инженер стройконтроля",
+          workDescription: template.description || template.title,
+          projectDocumentation: formData?.projectDocumentation || "Рабочая документация",
+          dateStart: act.dateStart || new Date().toISOString().split("T")[0],
+          dateEnd: act.dateEnd || new Date().toISOString().split("T")[0],
+          qualityDocuments: formData?.qualityDocuments || "Сертификаты, паспорта качества",
+          materials: formData?.materials,
+        };
+
+        try {
+          const pdfBuffer = await generateAosrPdf(actData);
+          const filename = `AOSR_${template.code}_${act.id}_${Date.now()}.pdf`;
+          const filePath = path.join(pdfDir, filename);
+          fs.writeFileSync(filePath, pdfBuffer);
+
+          generatedFiles.push({
+            templateId: template.templateId,
+            filename,
+            url: `/api/pdfs/${filename}`,
+          });
+        } catch (pdfError) {
+          console.error(`Error generating PDF for template ${templateId}:`, pdfError);
+        }
+      }
+
+      res.json({
+        success: true,
+        files: generatedFiles,
+        message: `Generated ${generatedFiles.length} PDF(s)`,
+      });
+    } catch (err) {
+      console.error("Error exporting act:", err);
+      res.status(500).json({ message: "Failed to export act" });
+    }
+  });
+
+  // Serve generated PDFs
+  app.get("/api/pdfs/:filename", (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(process.cwd(), "generated_pdfs", filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "File not found" });
+    }
+    
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.sendFile(filePath);
+  });
+
+  // Create act with selected templates
+  app.post("/api/acts/create-with-templates", async (req, res) => {
+    try {
+      const { dateStart, dateEnd, location, templateIds, formData } = req.body;
+
+      if (!templateIds || !Array.isArray(templateIds) || templateIds.length === 0) {
+        return res.status(400).json({ message: "No templates selected" });
+      }
+
+      // Create the act
+      const act = await storage.createAct({
+        dateStart,
+        dateEnd,
+        location: location || formData?.objectAddress || "Объект",
+        status: "draft",
+        worksData: [],
+      });
+
+      // Create template selections
+      for (const templateId of templateIds) {
+        const template = await storage.getActTemplateByTemplateId(templateId);
+        if (template) {
+          await storage.createActTemplateSelection({
+            actId: act.id,
+            templateId: template.id,
+            status: "pending",
+          });
+        }
+      }
+
+      res.status(201).json(act);
+    } catch (err) {
+      console.error("Error creating act with templates:", err);
+      res.status(500).json({ message: "Failed to create act" });
+    }
+  });
+
   return httpServer;
 }
 
@@ -190,19 +351,19 @@ async function seedDatabase() {
       code: "3.1.1",
       description: "Installation of foundation rebar",
       unit: "tons",
-      quantityTotal: 100
+      quantityTotal: "100"
     });
     await storage.createWork({
       code: "3.1.2",
       description: "Concrete pouring for foundation",
       unit: "m3",
-      quantityTotal: 500
+      quantityTotal: "500"
     });
     await storage.createWork({
       code: "4.5",
       description: "Bricklaying for external walls",
       unit: "m2",
-      quantityTotal: 1200
+      quantityTotal: "1200"
     });
   }
 }

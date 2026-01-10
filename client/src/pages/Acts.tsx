@@ -8,13 +8,40 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, CalendarIcon, Download, Loader2, Plus, ChevronRight } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { FileText, CalendarIcon, Download, Loader2, Plus, ChevronRight, Check, FileDown } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useLanguageStore, translations } from "@/lib/i18n";
 import { ru, enUS } from "date-fns/locale";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface ActTemplate {
+  id: number;
+  templateId: string;
+  code: string;
+  category: string;
+  title: string;
+  titleEn: string | null;
+  description: string | null;
+  normativeRef: string | null;
+  isActive: boolean | null;
+}
+
+interface Category {
+  name: string;
+  nameEn: string;
+}
+
+interface TemplatesResponse {
+  templates: ActTemplate[];
+  categories: Record<string, Category>;
+}
 
 export default function Acts() {
   const { language } = useLanguageStore();
@@ -22,41 +49,137 @@ export default function Acts() {
   const { data: acts = [], isLoading } = useActs();
   const generateAct = useGenerateAct();
   const { toast } = useToast();
-  const [date, setDate] = useState<Date>();
+  const [dateStart, setDateStart] = useState<Date>();
+  const [dateEnd, setDateEnd] = useState<Date>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const { data: templatesData, isLoading: templatesLoading } = useQuery<TemplatesResponse>({
+    queryKey: ["/api/act-templates"],
+  });
+
+  const createActWithTemplates = useMutation({
+    mutationFn: async (data: { dateStart: string; dateEnd: string; templateIds: string[] }) => {
+      const response = await apiRequest("POST", "/api/acts/create-with-templates", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/acts"] });
+    },
+  });
+
+  const exportAct = useMutation({
+    mutationFn: async (data: { actId: number; templateIds: string[] }) => {
+      const response = await apiRequest("POST", `/api/acts/${data.actId}/export`, {
+        templateIds: data.templateIds,
+        formData: {},
+      });
+      return response.json();
+    },
+  });
+
+  const handleTemplateToggle = (templateId: string) => {
+    const newSelected = new Set(selectedTemplates);
+    if (newSelected.has(templateId)) {
+      newSelected.delete(templateId);
+    } else {
+      newSelected.add(templateId);
+    }
+    setSelectedTemplates(newSelected);
+  };
+
+  const handleSelectAll = (category: string) => {
+    if (!templatesData) return;
+    const categoryTemplates = templatesData.templates.filter((t) => t.category === category);
+    const allSelected = categoryTemplates.every((t) => selectedTemplates.has(t.templateId));
+
+    const newSelected = new Set(selectedTemplates);
+    if (allSelected) {
+      categoryTemplates.forEach((t) => newSelected.delete(t.templateId));
+    } else {
+      categoryTemplates.forEach((t) => newSelected.add(t.templateId));
+    }
+    setSelectedTemplates(newSelected);
+  };
 
   const handleGenerate = async () => {
-    if (!date) return;
-    
-    try {
-      // For demo, just use same day as start/end
-      await generateAct.mutateAsync({
-        dateStart: format(date, 'yyyy-MM-dd'),
-        dateEnd: format(date, 'yyyy-MM-dd'),
+    if (!dateStart || !dateEnd || selectedTemplates.size === 0) {
+      toast({
+        title: language === "ru" ? "Ошибка" : "Error",
+        description: language === "ru" ? "Выберите период и хотя бы один шаблон" : "Select date range and at least one template",
+        variant: "destructive",
       });
-      setIsDialogOpen(false);
-      toast({ 
-        title: language === 'ru' ? "Успех" : "Success", 
-        description: language === 'ru' ? "Акт АОСР успешно создан" : "AOSR Act generated successfully" 
-      });
-    } catch (error) {
-      toast({ 
-        title: language === 'ru' ? "Ошибка" : "Error", 
-        description: language === 'ru' ? "Не удалось создать акт" : "Failed to generate act", 
-        variant: "destructive" 
-      });
+      return;
     }
+
+    setIsGenerating(true);
+    try {
+      const act = await createActWithTemplates.mutateAsync({
+        dateStart: format(dateStart, "yyyy-MM-dd"),
+        dateEnd: format(dateEnd, "yyyy-MM-dd"),
+        templateIds: Array.from(selectedTemplates),
+      });
+
+      const exportResult = await exportAct.mutateAsync({
+        actId: act.id,
+        templateIds: Array.from(selectedTemplates),
+      });
+
+      setIsDialogOpen(false);
+      setSelectedTemplates(new Set());
+      setDateStart(undefined);
+      setDateEnd(undefined);
+
+      if (exportResult.files && exportResult.files.length > 0) {
+        toast({
+          title: language === "ru" ? "Успех" : "Success",
+          description: language === "ru" ? `Создано ${exportResult.files.length} PDF-документов` : `Generated ${exportResult.files.length} PDF documents`,
+        });
+
+        exportResult.files.forEach((file: { url: string; filename: string }) => {
+          window.open(file.url, "_blank");
+        });
+      }
+    } catch (error) {
+      toast({
+        title: language === "ru" ? "Ошибка" : "Error",
+        description: language === "ru" ? "Не удалось создать акты" : "Failed to generate acts",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const groupedTemplates = templatesData?.templates.reduce(
+    (acc, template) => {
+      if (!acc[template.category]) {
+        acc[template.category] = [];
+      }
+      acc[template.category].push(template);
+      return acc;
+    },
+    {} as Record<string, ActTemplate[]>
+  );
+
+  const handleDownloadAct = async (actId: number) => {
+    const selections = await fetch(`/api/act-template-selections?actId=${actId}`).catch(() => null);
+    toast({
+      title: language === "ru" ? "Скачивание" : "Downloading",
+      description: language === "ru" ? "Подготовка документов..." : "Preparing documents...",
+    });
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-background bg-grain">
       <Header title={t.title} />
-      
+
       <div className="flex-1 px-4 py-6 pb-24 max-w-md mx-auto w-full">
         {isLoading ? (
-           <div className="flex justify-center py-12">
-             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-           </div>
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
         ) : (
           <div className="space-y-4">
             {acts.length === 0 ? (
@@ -65,44 +188,42 @@ export default function Acts() {
                   <FileText className="h-10 w-10 text-muted-foreground/50" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-semibold text-lg">{language === 'ru' ? "Нет актов" : "No Acts Yet"}</h3>
+                  <h3 className="font-semibold text-lg">{language === "ru" ? "Нет актов" : "No Acts Yet"}</h3>
                   <p className="text-sm text-muted-foreground max-w-[200px] mx-auto">
-                    {language === 'ru' ? "Создайте первый АОСР на основе записей работ." : "Generate your first AOSR document based on logged work."}
+                    {language === "ru" ? "Создайте первый АОСР на основе шаблонов." : "Generate your first AOSR document from templates."}
                   </p>
                 </div>
               </div>
             ) : (
               acts.map((act, idx) => (
-                <motion.div
-                  key={act.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: idx * 0.1 }}
-                >
-                  <Card className="overflow-hidden group hover:border-primary/50 transition-all cursor-pointer">
-                    <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
+                <motion.div key={act.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.1 }}>
+                  <Card className="overflow-hidden group hover:border-primary/50 transition-all cursor-pointer" data-testid={`card-act-${act.id}`}>
+                    <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                           <FileText className="h-5 w-5" />
                         </div>
                         <div>
-                          <CardTitle className="text-base">{language === 'ru' ? "Акт №" : "Act #"}{act.id}</CardTitle>
+                          <CardTitle className="text-base">
+                            {language === "ru" ? "Акт №" : "Act #"}
+                            {act.id}
+                          </CardTitle>
                           <CardDescription className="text-xs">
-                            {act.dateStart ? format(new Date(act.dateStart), "MMM d, yyyy", { locale: language === 'ru' ? ru : enUS }) : "No date"}
+                            {act.dateStart ? format(new Date(act.dateStart), "MMM d, yyyy", { locale: language === "ru" ? ru : enUS }) : "No date"}
                           </CardDescription>
                         </div>
                       </div>
-                      <Badge variant={act.status === 'signed' ? 'default' : 'secondary'} className="capitalize">
+                      <Badge variant={act.status === "signed" ? "default" : "secondary"} className="capitalize">
                         {act.status}
                       </Badge>
                     </CardHeader>
                     <CardContent className="p-4 pt-2">
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-xs text-muted-foreground">
-                          {act.worksData?.length || 0} {language === 'ru' ? "работ" : "work items"}
+                          {act.worksData?.length || 0} {language === "ru" ? "работ" : "work items"}
                         </span>
-                        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 group-hover:text-primary">
-                          {language === 'ru' ? "Скачать" : "Download"} <Download className="h-3 w-3" />
+                        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 group-hover:text-primary" onClick={() => handleDownloadAct(act.id)} data-testid={`button-download-act-${act.id}`}>
+                          {language === "ru" ? "Скачать" : "Download"} <Download className="h-3 w-3" />
                         </Button>
                       </div>
                     </CardContent>
@@ -117,48 +238,130 @@ export default function Acts() {
       <div className="fixed bottom-20 right-4 z-40 md:right-[max(1rem,calc(50vw-220px))]">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="h-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 pl-5 pr-6 gap-2">
+            <Button className="h-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 pl-5 pr-6 gap-2" data-testid="button-generate-act">
               <Plus className="h-5 w-5" />
               <span className="font-semibold">{t.generate}</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] rounded-2xl flex flex-col">
             <DialogHeader>
-              <DialogTitle>{t.generate}</DialogTitle>
+              <DialogTitle>{language === "ru" ? "Создать акты АОСР" : "Generate AOSR Acts"}</DialogTitle>
             </DialogHeader>
-            <div className="py-6 space-y-4">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium">{language === 'ru' ? "Выберите дату" : "Select Date"}</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal h-12 rounded-xl",
-                        !date && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "PPP", { locale: language === 'ru' ? ru : enUS }) : <span>{language === 'ru' ? "Выберите дату" : "Pick a date"}</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      initialFocus
-                      locale={language === 'ru' ? ru : enUS}
-                    />
-                  </PopoverContent>
-                </Popover>
+            <ScrollArea className="flex-1 max-h-[60vh]">
+              <div className="py-4 space-y-4 pr-4">
+                <div className="grid gap-4 grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">{language === "ru" ? "Дата начала" : "Start Date"}</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10 rounded-xl text-sm", !dateStart && "text-muted-foreground")} data-testid="button-date-start">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dateStart ? format(dateStart, "dd.MM.yy", { locale: language === "ru" ? ru : enUS }) : <span>{language === "ru" ? "Выбрать" : "Select"}</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={dateStart} onSelect={setDateStart} initialFocus locale={language === "ru" ? ru : enUS} />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">{language === "ru" ? "Дата окончания" : "End Date"}</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10 rounded-xl text-sm", !dateEnd && "text-muted-foreground")} data-testid="button-date-end">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dateEnd ? format(dateEnd, "dd.MM.yy", { locale: language === "ru" ? ru : enUS }) : <span>{language === "ru" ? "Выбрать" : "Select"}</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={dateEnd} onSelect={setDateEnd} initialFocus locale={language === "ru" ? ru : enUS} />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">{language === "ru" ? "Выберите шаблоны актов" : "Select Act Templates"}</label>
+                    <Badge variant="secondary" className="text-xs">
+                      {selectedTemplates.size} {language === "ru" ? "выбрано" : "selected"}
+                    </Badge>
+                  </div>
+
+                  {templatesLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <Accordion type="multiple" className="w-full">
+                      {groupedTemplates &&
+                        Object.entries(groupedTemplates).map(([category, templates]) => {
+                          const categoryInfo = templatesData?.categories[category];
+                          const categoryName = language === "ru" ? categoryInfo?.name : categoryInfo?.nameEn || category;
+                          const allSelected = templates.every((t) => selectedTemplates.has(t.templateId));
+                          const someSelected = templates.some((t) => selectedTemplates.has(t.templateId));
+
+                          return (
+                            <AccordionItem key={category} value={category} className="border rounded-lg mb-2 px-3">
+                              <AccordionTrigger className="py-3 hover:no-underline">
+                                <div className="flex items-center gap-3 flex-1">
+                                  <Checkbox
+                                    checked={allSelected}
+                                    className={cn(someSelected && !allSelected && "data-[state=checked]:bg-primary/50")}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectAll(category);
+                                    }}
+                                    data-testid={`checkbox-category-${category}`}
+                                  />
+                                  <span className="text-sm font-medium">{categoryName}</span>
+                                  <Badge variant="outline" className="ml-auto mr-2 text-xs">
+                                    {templates.filter((t) => selectedTemplates.has(t.templateId)).length}/{templates.length}
+                                  </Badge>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent className="pb-3">
+                                <div className="space-y-2 pl-7">
+                                  {templates.map((template) => (
+                                    <label key={template.templateId} className="flex items-start gap-3 cursor-pointer py-1.5 hover:bg-muted/50 rounded-md px-2 -mx-2">
+                                      <Checkbox
+                                        checked={selectedTemplates.has(template.templateId)}
+                                        onCheckedChange={() => handleTemplateToggle(template.templateId)}
+                                        className="mt-0.5"
+                                        data-testid={`checkbox-template-${template.templateId}`}
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-muted-foreground font-mono">{template.code}</span>
+                                          <span className="text-sm">{language === "ru" ? template.title : template.titleEn || template.title}</span>
+                                        </div>
+                                        {template.normativeRef && <p className="text-xs text-muted-foreground mt-0.5">{template.normativeRef}</p>}
+                                      </div>
+                                    </label>
+                                  ))}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          );
+                        })}
+                    </Accordion>
+                  )}
+                </div>
               </div>
-              <Button 
-                onClick={handleGenerate} 
-                className="w-full h-12 rounded-xl"
-                disabled={!date || generateAct.isPending}
-              >
-                {generateAct.isPending ? (language === 'ru' ? "Создание..." : "Generating...") : (language === 'ru' ? "Создать документ" : "Generate Document")}
+            </ScrollArea>
+            <div className="pt-4 border-t">
+              <Button onClick={handleGenerate} className="w-full h-12 rounded-xl gap-2" disabled={!dateStart || !dateEnd || selectedTemplates.size === 0 || isGenerating} data-testid="button-submit-generate">
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {language === "ru" ? "Создание..." : "Generating..."}
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="h-4 w-4" />
+                    {language === "ru" ? `Создать ${selectedTemplates.size} актов` : `Generate ${selectedTemplates.size} acts`}
+                  </>
+                )}
               </Button>
             </div>
           </DialogContent>

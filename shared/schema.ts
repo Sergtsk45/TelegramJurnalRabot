@@ -58,6 +58,29 @@ export const attachments = pgTable("attachments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Act Templates catalog
+export const actTemplates = pgTable("act_templates", {
+  id: serial("id").primaryKey(),
+  templateId: text("template_id").notNull().unique(), // e.g., "foundation-prep"
+  code: text("code").notNull(), // e.g., "AOSR-01"
+  category: text("category").notNull(), // e.g., "general", "roofing"
+  title: text("title").notNull(), // Russian title
+  titleEn: text("title_en"), // English title
+  description: text("description"),
+  normativeRef: text("normative_ref"), // Reference to normative document
+  isActive: boolean("is_active").default(true),
+});
+
+// Selected templates for act generation
+export const actTemplateSelections = pgTable("act_template_selections", {
+  id: serial("id").primaryKey(),
+  actId: integer("act_id").references(() => acts.id),
+  templateId: integer("template_id").references(() => actTemplates.id),
+  status: text("status").default("pending"), // pending, generated, error
+  pdfUrl: text("pdf_url"),
+  generatedAt: timestamp("generated_at"),
+});
+
 
 // === SCHEMAS ===
 
@@ -65,6 +88,8 @@ export const insertWorkSchema = createInsertSchema(works).omit({ id: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true, isProcessed: true, normalizedData: true });
 export const insertActSchema = createInsertSchema(acts).omit({ id: true, createdAt: true });
 export const insertAttachmentSchema = createInsertSchema(attachments).omit({ id: true, createdAt: true });
+export const insertActTemplateSchema = createInsertSchema(actTemplates).omit({ id: true });
+export const insertActTemplateSelectionSchema = createInsertSchema(actTemplateSelections).omit({ id: true, generatedAt: true });
 
 // === EXPLICIT API TYPES ===
 
@@ -78,6 +103,12 @@ export type Act = typeof acts.$inferSelect;
 export type InsertAct = z.infer<typeof insertActSchema>;
 
 export type Attachment = typeof attachments.$inferSelect;
+
+export type ActTemplate = typeof actTemplates.$inferSelect;
+export type InsertActTemplate = z.infer<typeof insertActTemplateSchema>;
+
+export type ActTemplateSelection = typeof actTemplateSelections.$inferSelect;
+export type InsertActTemplateSelection = z.infer<typeof insertActTemplateSelectionSchema>;
 
 // Request/Response Types
 export type CreateMessageRequest = {

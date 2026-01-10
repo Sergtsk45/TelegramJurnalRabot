@@ -1,8 +1,10 @@
 import { db } from "./db";
 import {
-  works, messages, acts, attachments,
+  works, messages, acts, attachments, actTemplates, actTemplateSelections,
   type InsertWork, type InsertMessage, type InsertAct,
-  type Work, type Message, type Act, type Attachment
+  type Work, type Message, type Act, type Attachment,
+  type ActTemplate, type InsertActTemplate,
+  type ActTemplateSelection, type InsertActTemplateSelection
 } from "@shared/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 
@@ -26,6 +28,18 @@ export interface IStorage {
   
   // Attachments
   getAttachments(actId: number): Promise<Attachment[]>;
+
+  // Act Templates
+  getActTemplates(): Promise<ActTemplate[]>;
+  getActTemplate(id: number): Promise<ActTemplate | undefined>;
+  getActTemplateByTemplateId(templateId: string): Promise<ActTemplate | undefined>;
+  createActTemplate(template: InsertActTemplate): Promise<ActTemplate>;
+  seedActTemplates(templates: InsertActTemplate[]): Promise<void>;
+
+  // Act Template Selections
+  getActTemplateSelections(actId: number): Promise<ActTemplateSelection[]>;
+  createActTemplateSelection(selection: InsertActTemplateSelection): Promise<ActTemplateSelection>;
+  updateActTemplateSelectionStatus(id: number, status: string, pdfUrl?: string): Promise<ActTemplateSelection>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -88,6 +102,58 @@ export class DatabaseStorage implements IStorage {
 
   async getAttachments(actId: number): Promise<Attachment[]> {
     return await db.select().from(attachments).where(eq(attachments.actId, actId));
+  }
+
+  // Act Templates
+  async getActTemplates(): Promise<ActTemplate[]> {
+    return await db.select().from(actTemplates).orderBy(actTemplates.code);
+  }
+
+  async getActTemplate(id: number): Promise<ActTemplate | undefined> {
+    const [template] = await db.select().from(actTemplates).where(eq(actTemplates.id, id));
+    return template;
+  }
+
+  async getActTemplateByTemplateId(templateId: string): Promise<ActTemplate | undefined> {
+    const [template] = await db.select().from(actTemplates).where(eq(actTemplates.templateId, templateId));
+    return template;
+  }
+
+  async createActTemplate(template: InsertActTemplate): Promise<ActTemplate> {
+    const [newTemplate] = await db.insert(actTemplates).values(template).returning();
+    return newTemplate;
+  }
+
+  async seedActTemplates(templates: InsertActTemplate[]): Promise<void> {
+    for (const template of templates) {
+      const existing = await this.getActTemplateByTemplateId(template.templateId);
+      if (!existing) {
+        await this.createActTemplate(template);
+      }
+    }
+  }
+
+  // Act Template Selections
+  async getActTemplateSelections(actId: number): Promise<ActTemplateSelection[]> {
+    return await db.select().from(actTemplateSelections).where(eq(actTemplateSelections.actId, actId));
+  }
+
+  async createActTemplateSelection(selection: InsertActTemplateSelection): Promise<ActTemplateSelection> {
+    const [newSelection] = await db.insert(actTemplateSelections).values(selection).returning();
+    return newSelection;
+  }
+
+  async updateActTemplateSelectionStatus(id: number, status: string, pdfUrl?: string): Promise<ActTemplateSelection> {
+    const updateData: any = { status };
+    if (pdfUrl) {
+      updateData.pdfUrl = pdfUrl;
+      updateData.generatedAt = new Date();
+    }
+    const [updated] = await db.update(actTemplateSelections)
+      .set(updateData)
+      .where(eq(actTemplateSelections.id, id))
+      .returning();
+    return updated;
   }
 }
 

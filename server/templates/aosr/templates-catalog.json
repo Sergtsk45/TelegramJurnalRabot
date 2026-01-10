@@ -1,0 +1,282 @@
+{
+  "templates": [
+    {
+      "id": "foundation-prep",
+      "code": "AOSR-01",
+      "category": "general",
+      "title": "Подготовка основания",
+      "titleEn": "Foundation Preparation",
+      "description": "Устройство песчаной, гравийной, щебёночной подготовки оснований",
+      "normativeRef": "РД 11-02-2006, СП 45.13330"
+    },
+    {
+      "id": "concrete-prep",
+      "code": "AOSR-02",
+      "category": "general",
+      "title": "Бетонная подготовка",
+      "titleEn": "Concrete Preparation",
+      "description": "Устройство бетонной подготовки оснований",
+      "normativeRef": "РД 11-02-2006, СП 63.13330"
+    },
+    {
+      "id": "waterproofing-foundation",
+      "code": "AOSR-03",
+      "category": "general",
+      "title": "Гидроизоляция фундаментов",
+      "titleEn": "Foundation Waterproofing",
+      "description": "Устройство гидроизоляции фундаментов",
+      "normativeRef": "РД 11-02-2006, СП 71.13330"
+    },
+    {
+      "id": "reinforcement",
+      "code": "AOSR-04",
+      "category": "general",
+      "title": "Армирование конструкций",
+      "titleEn": "Reinforcement Installation",
+      "description": "Установка арматурных сеток и каркасов",
+      "normativeRef": "РД 11-02-2006, СП 63.13330"
+    },
+    {
+      "id": "concreting",
+      "code": "AOSR-05",
+      "category": "general",
+      "title": "Бетонирование конструкций",
+      "titleEn": "Concrete Pouring",
+      "description": "Бетонирование фундаментов и монолитных конструкций",
+      "normativeRef": "РД 11-02-2006, СП 63.13330"
+    },
+    {
+      "id": "backfill",
+      "code": "AOSR-06",
+      "category": "general",
+      "title": "Обратная засыпка",
+      "titleEn": "Backfill",
+      "description": "Обратная засыпка пазух котлованов",
+      "normativeRef": "РД 11-02-2006, СП 45.13330"
+    },
+    {
+      "id": "formwork",
+      "code": "AOSR-07",
+      "category": "general",
+      "title": "Установка опалубки",
+      "titleEn": "Formwork Installation",
+      "description": "Устройство монолитных железобетонных конструкций - установка опалубки",
+      "normativeRef": "РД 11-02-2006, СП 70.13330"
+    },
+    {
+      "id": "welding",
+      "code": "AOSR-08",
+      "category": "general",
+      "title": "Сварочные работы",
+      "titleEn": "Welding Works",
+      "description": "Сварка закладных деталей и арматурных выпусков",
+      "normativeRef": "РД 11-02-2006, СП 70.13330"
+    },
+    {
+      "id": "waterproofing-underground",
+      "code": "AOSR-09",
+      "category": "general",
+      "title": "Гидроизоляция подземных частей",
+      "titleEn": "Underground Waterproofing",
+      "description": "Гидроизоляция подземных частей здания",
+      "normativeRef": "РД 11-02-2006, СП 71.13330"
+    },
+    {
+      "id": "thermal-insulation",
+      "code": "AOSR-10",
+      "category": "general",
+      "title": "Тепло- и звукоизоляция",
+      "titleEn": "Thermal and Sound Insulation",
+      "description": "Устройство тепло- и звукоизоляции конструкций",
+      "normativeRef": "РД 11-02-2006, СП 71.13330"
+    },
+    {
+      "id": "floor-base",
+      "code": "AOSR-11",
+      "category": "general",
+      "title": "Подстилающие слои полов",
+      "titleEn": "Floor Base Layers",
+      "description": "Устройство подстилающих слоёв полов",
+      "normativeRef": "РД 11-02-2006, СП 71.13330"
+    },
+    {
+      "id": "roof-vapor",
+      "code": "AOSR-12",
+      "category": "roofing",
+      "title": "Пароизоляция кровли",
+      "titleEn": "Roof Vapor Barrier",
+      "description": "Пароизоляция кровли",
+      "normativeRef": "РД 11-02-2006, СП 17.13330"
+    },
+    {
+      "id": "roof-insulation",
+      "code": "AOSR-13",
+      "category": "roofing",
+      "title": "Теплоизоляция кровли",
+      "titleEn": "Roof Insulation",
+      "description": "Теплоизоляция кровли",
+      "normativeRef": "РД 11-02-2006, СП 17.13330"
+    },
+    {
+      "id": "roof-slope",
+      "code": "AOSR-14",
+      "category": "roofing",
+      "title": "Уклонообразующие слои",
+      "titleEn": "Slope-forming Layers",
+      "description": "Устройство уклонообразующих слоёв кровли",
+      "normativeRef": "РД 11-02-2006, СП 17.13330"
+    },
+    {
+      "id": "roof-membrane",
+      "code": "AOSR-15",
+      "category": "roofing",
+      "title": "Рулонное покрытие кровли",
+      "titleEn": "Roll Roofing",
+      "description": "Устройство рулонного кровельного покрытия",
+      "normativeRef": "РД 11-02-2006, СП 17.13330"
+    },
+    {
+      "id": "metal-structures",
+      "code": "AOSR-16",
+      "category": "structures",
+      "title": "Монтаж металлоконструкций",
+      "titleEn": "Metal Structure Installation",
+      "description": "Монтаж металлоконструкций",
+      "normativeRef": "РД 11-02-2006, СП 70.13330"
+    },
+    {
+      "id": "anticorrosion",
+      "code": "AOSR-17",
+      "category": "structures",
+      "title": "Антикоррозийная защита",
+      "titleEn": "Anticorrosion Protection",
+      "description": "Антикоррозийная защита металлоконструкций",
+      "normativeRef": "РД 11-02-2006, СП 72.13330"
+    },
+    {
+      "id": "facade-frame",
+      "code": "AOSR-18",
+      "category": "structures",
+      "title": "Каркас навесного фасада",
+      "titleEn": "Facade Frame",
+      "description": "Устройство навесных фасадов (каркас, крепления)",
+      "normativeRef": "РД 11-02-2006, СП 71.13330"
+    },
+    {
+      "id": "embedded-parts",
+      "code": "AOSR-19",
+      "category": "structures",
+      "title": "Закладные детали",
+      "titleEn": "Embedded Parts",
+      "description": "Установка закладных металлоконструкций",
+      "normativeRef": "РД 11-02-2006, СП 70.13330"
+    },
+    {
+      "id": "pipeline-underground",
+      "code": "AOSR-20",
+      "category": "engineering",
+      "title": "Прокладка трубопроводов в грунте",
+      "titleEn": "Underground Pipelines",
+      "description": "Прокладка трубопроводов в грунте",
+      "normativeRef": "РД 11-02-2006, СП 73.13330"
+    },
+    {
+      "id": "pipeline-test",
+      "code": "AOSR-21",
+      "category": "engineering",
+      "title": "Испытания трубопроводов",
+      "titleEn": "Pipeline Testing",
+      "description": "Испытания трубопроводов на герметичность и прочность",
+      "normativeRef": "РД 11-02-2006, СП 73.13330"
+    },
+    {
+      "id": "pipeline-insulation",
+      "code": "AOSR-22",
+      "category": "engineering",
+      "title": "Изоляция трубопроводов",
+      "titleEn": "Pipeline Insulation",
+      "description": "Устройство тепловой изоляции трубопроводов",
+      "normativeRef": "РД 11-02-2006, СП 61.13330"
+    },
+    {
+      "id": "cable-hidden",
+      "code": "AOSR-23",
+      "category": "engineering",
+      "title": "Скрытая прокладка кабелей",
+      "titleEn": "Hidden Cable Installation",
+      "description": "Устройство кабельных линий скрытой прокладки",
+      "normativeRef": "РД 11-02-2006, СП 76.13330"
+    },
+    {
+      "id": "grounding",
+      "code": "AOSR-24",
+      "category": "engineering",
+      "title": "Заземление и молниезащита",
+      "titleEn": "Grounding and Lightning Protection",
+      "description": "Устройство систем заземления и молниезащиты",
+      "normativeRef": "РД 11-02-2006, СП 76.13330"
+    },
+    {
+      "id": "fire-protection",
+      "code": "AOSR-25",
+      "category": "fire",
+      "title": "Огнезащита конструкций",
+      "titleEn": "Fire Protection of Structures",
+      "description": "Огнезащита строительных конструкций",
+      "normativeRef": "РД 11-02-2006, Федеральный закон № 123-ФЗ"
+    },
+    {
+      "id": "fire-duct",
+      "code": "AOSR-26",
+      "category": "fire",
+      "title": "Огнезащита воздуховодов",
+      "titleEn": "Fire Protection of Ducts",
+      "description": "Огнезащита воздуховодов систем вентиляции",
+      "normativeRef": "РД 11-02-2006, СП 60.13330"
+    },
+    {
+      "id": "fire-rating",
+      "code": "AOSR-27",
+      "category": "fire",
+      "title": "Предел огнестойкости конструкций",
+      "titleEn": "Fire Resistance Rating",
+      "description": "Освидетельствование конструкций на обеспечение предела огнестойкости",
+      "normativeRef": "РД 11-02-2006, Федеральный закон № 123-ФЗ"
+    },
+    {
+      "id": "road-base",
+      "code": "AOSR-28",
+      "category": "outdoor",
+      "title": "Основания дорожных покрытий",
+      "titleEn": "Road Base",
+      "description": "Подготовка оснований для устройства покрытий тротуаров, площадок, проездов",
+      "normativeRef": "РД 11-02-2006, СП 78.13330"
+    }
+  ],
+  "categories": {
+    "general": {
+      "name": "Общестроительные работы",
+      "nameEn": "General Construction"
+    },
+    "roofing": {
+      "name": "Кровельные работы",
+      "nameEn": "Roofing Works"
+    },
+    "structures": {
+      "name": "Конструкции",
+      "nameEn": "Structures"
+    },
+    "engineering": {
+      "name": "Инженерные сети",
+      "nameEn": "Engineering Networks"
+    },
+    "fire": {
+      "name": "Пожарная безопасность",
+      "nameEn": "Fire Safety"
+    },
+    "outdoor": {
+      "name": "Наружные работы",
+      "nameEn": "Outdoor Works"
+    }
+  }
+}

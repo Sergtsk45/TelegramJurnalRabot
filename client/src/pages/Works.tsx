@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
-import { useWorks, useCreateWork } from "@/hooks/use-works";
+import { useWorks, useCreateWork, useImportWorks } from "@/hooks/use-works";
 import { WorkItemCard } from "@/components/WorkItemCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ export default function Works() {
   const t = translations[language].works;
   const { data: works = [], isLoading } = useWorks();
   const createWork = useCreateWork();
+  const importWorks = useImportWorks();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -59,101 +60,93 @@ export default function Works() {
     }
   };
 
+  const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const isValidWorkCode = (code: string): boolean => {
+    // Accept: 1, 3.1, 3.1.1, etc.
+    return /^\d+(?:\.\d+)*$/.test(code.trim());
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
     try {
-      // Clear existing works first (temporary debugging measure)
-      const { apiRequest } = await import("@/lib/queryClient");
-      try {
-        await apiRequest("DELETE", "/api/works");
-        console.log("Successfully cleared existing works");
-      } catch (clearError) {
-        console.error("Failed to clear works before import:", clearError);
-        // Continue anyway
+      const buffer = await readFileAsArrayBuffer(file);
+      const data = new Uint8Array(buffer);
+      const workbook = XLSX.read(data, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+
+      // Header: 1 to get raw array of arrays
+      const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      console.log("Starting import of rows:", jsonRaw.length);
+
+      const items = [];
+      for (const row of jsonRaw) {
+        if (!Array.isArray(row) || row.length < 5) continue;
+
+        const codeRaw = row[1]; // № в ЛСР
+        const descriptionRaw = row[2];
+        const unitRaw = row[3];
+        const quantityRaw = row[4];
+
+        // Skip technical header row (contains column numbers like 1, 2, 3...)
+        if (row[0] === 1 && row[1] === 2 && row[2] === 3) continue;
+
+        const code = String(codeRaw ?? "").trim();
+        const description = String(descriptionRaw ?? "").trim();
+        const unit = String(unitRaw ?? "").trim();
+        const quantityTotal = String(quantityRaw ?? "0").trim();
+
+        if (!code || !isValidWorkCode(code)) continue;
+        if (!description) continue;
+
+        items.push({
+          code,
+          description,
+          unit,
+          quantityTotal,
+          synonyms: [],
+        });
       }
 
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          // Header: 1 to get raw array of arrays
-          const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      if (items.length === 0) {
+        toast({
+          title: language === "ru" ? "Импорт" : "Import",
+          description:
+            language === "ru"
+              ? "В файле не найдено подходящих строк для импорта."
+              : "No valid rows found to import.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-          console.log("Starting import of rows:", jsonRaw.length);
+      // Safe default: merge (no delete)
+      const result = await importWorks.mutateAsync({ mode: "merge", items });
 
-          let successCount = 0;
-          for (const row of jsonRaw) {
-            // Skip empty rows or rows with less than 5 columns
-            if (!Array.isArray(row) || row.length < 5) continue;
-
-            // Actual Excel structure (based on file analysis):
-            // Column 0: № п/п (empty for work items)
-            // Column 1: № в ЛСР (work code like "1", "3", "4")
-            // Column 2: Наименование работ (description)
-            // Column 3: Ед. изм. (unit)
-            // Column 4: Кол-во (quantity)
-            const code = row[1]; // № в ЛСР is in column 1
-            const description = row[2];
-            const unit = row[3];
-            const quantityTotal = row[4];
-
-            // Skip technical header row (contains column numbers like 1, 2, 3, 4, 5)
-            if (row[0] === 1 && row[1] === 2 && row[2] === 3) {
-              continue;
-            }
-
-            // Skip rows where code is null/undefined or not a valid work code
-            if (code === null || code === undefined) continue;
-
-            // Skip rows where code is not numeric (section headers usually have text in other columns)
-            const numericCode = parseFloat(String(code));
-            if (isNaN(numericCode)) continue;
-
-            // Skip rows without description
-            const hasDescription = description && String(description).trim().length > 0;
-            if (!hasDescription) continue;
-
-            // Import valid work item
-            await createWork.mutateAsync({
-              code: String(code),
-              description: String(description),
-              unit: String(unit || ""),
-              quantityTotal: String(quantityTotal || "0"),
-              synonyms: [],
-            });
-            successCount++;
-          }
-
-          console.log("Import finished. Success count:", successCount);
-
-          toast({
-            title: language === 'ru' ? "Импорт завершен" : "Import Complete",
-            description: language === 'ru' 
-              ? `Успешно импортировано ${successCount} позиций` 
-              : `Successfully imported ${successCount} items`,
-          });
-          event.target.value = ''; // Reset input
-        } catch (error) {
-          console.error("Error processing file data:", error);
-          toast({
-            title: language === 'ru' ? "Ошибка импорта" : "Import Error",
-            description: language === 'ru' ? "Не удалось обработать данные файла" : "Failed to process file data",
-            variant: "destructive",
-          });
-        }
-      };
-      reader.readAsArrayBuffer(file);
+      toast({
+        title: language === "ru" ? "Импорт завершен" : "Import Complete",
+        description:
+          language === "ru"
+            ? `Получено: ${result.received}. Создано: ${result.created}. Обновлено: ${result.updated}.`
+            : `Received: ${result.received}. Created: ${result.created}. Updated: ${result.updated}.`,
+      });
+      event.target.value = ""; // Reset input
     } catch (error) {
       console.error("Error in handleFileUpload:", error);
       toast({
         title: language === 'ru' ? "Ошибка импорта" : "Import Error",
-        description: language === 'ru' ? "Произошла ошибка при подготовке импорта" : "An error occurred during import preparation",
+        description: language === 'ru' ? "Произошла ошибка при импорте" : "An error occurred during import",
         variant: "destructive",
       });
     } finally {

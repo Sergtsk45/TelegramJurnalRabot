@@ -437,5 +437,11 @@ async function seedDatabase() {
   }
 }
 
-// Run seed
-seedDatabase().catch(console.error);
+// Run seed (dev-only, opt-in)
+const enableDemoSeed =
+  process.env.NODE_ENV !== "production" &&
+  String(process.env.ENABLE_DEMO_SEED || "").toLowerCase() === "true";
+
+if (enableDemoSeed) {
+  seedDatabase().catch(console.error);
+}

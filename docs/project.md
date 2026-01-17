@@ -84,6 +84,7 @@ flowchart LR
   - `AI_INTEGRATIONS_OPENAI_BASE_URL`
 - **Server**
   - `PORT` — порт HTTP (по умолчанию 5000).
+  - `ENABLE_DEMO_SEED=true` — (только dev) включить сидирование демо-работ в пустую БД. В production игнорируется.
 
 ## Команды разработки
 См. `package.json`:

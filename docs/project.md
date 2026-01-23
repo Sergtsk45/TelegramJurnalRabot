@@ -11,6 +11,7 @@
 - **Импорт ВОР из Excel**: пользователь загружает `.xlsx`, клиент парсит файл и отправляет позиции на сервер одним запросом `POST /api/works/import` в режиме **merge** (без авто-удаления данных).
 - **Журнал работ**: пользователь отправляет сообщение о выполненной работе; сервер сохраняет raw-текст и пытается извлечь структуру через OpenAI (workCode/quantity/date/location и т.д.).
 - **Генерация акта**: по диапазону дат выбираются обработанные сообщения, группируются по `workCode`, суммируются количества и создаётся запись акта.
+- **Экспорт PDF АОСР**: `POST /api/acts/:id/export` генерирует один или несколько PDF по выбранным шаблонам. Для АОСР используется pdfmake-шаблон `server/templates/aosr/aosr-template.json` с плейсхолдерами `{{...}}` и динамической таблицей материалов.
 
 ## Архитектура (высокоуровневая)
 
@@ -49,6 +50,8 @@ flowchart LR
   - `server/routes.ts` — регистрация API роутов для works/messages/acts.
   - `server/storage.ts` — слой доступа к данным (Drizzle).
   - `server/db.ts` — подключение к Postgres через `DATABASE_URL`.
+  - `server/pdfGenerator.ts` — генерация PDF (pdfmake), включая АОСР по шаблону `server/templates/aosr/aosr-template.json`.
+  - `server/templates/aosr/` — шаблоны и каталог шаблонов актов (`aosr-template.json`, `templates-catalog.json`).
   - `server/replit_integrations/*` — заготовки интеграций (чат, генерация изображений, batch-утилиты).
 - `shared/` — общий код для frontend/backend
   - `shared/schema.ts` — Drizzle таблицы + Zod-схемы/типы.
@@ -72,13 +75,15 @@ flowchart LR
 Текущие ресурсы:
 - **Works**: `GET /api/works`, `POST /api/works`
 - **Messages**: `GET /api/messages`, `POST /api/messages`
-- **Acts**: `GET /api/acts`, `POST /api/acts/generate`, `GET /api/acts/:id`
+- **Acts**: `GET /api/acts`, `POST /api/acts/generate`, `GET /api/acts/:id`, `POST /api/acts/create-with-templates`, `POST /api/acts/:id/export`
+- **Act Templates**: `GET /api/act-templates`
 - **Schedules**: `GET /api/schedules/default`, `POST /api/schedules`, `GET /api/schedules/:id`, `POST /api/schedules/:id/bootstrap-from-works`
 - **Schedule Tasks**: `PATCH /api/schedule-tasks/:id`
 
 Дополнительно:
 - `POST /api/messages/:id/process` — принудительная повторная обработка (нормализация) сообщения по его `id` (реализовано в `server/routes.ts`).
 - `POST /api/works/import` — bulk импорт ВОР, режим **merge** по умолчанию (без очистки существующих данных).
+- `GET /api/pdfs/:filename` — выдача сгенерированных PDF из `generated_pdfs/`.
 
 Примечание по безопасности:
 - `DELETE /api/works` — **деструктивный debug-эндпоинт**. В production отключён (возвращает 404).

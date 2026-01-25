@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-01-25] - Исправление ошибок TypeScript в server/replit_integrations/*
+### Добавлено
+- Нет
+
+### Изменено
+- Нет
+
+### Исправлено
+- Импорт `AbortError` в `server/replit_integrations/batch/utils.ts`: заменён `pRetry.AbortError` на прямой импорт `AbortError` из `p-retry`
+- Импорт схемы чата в `server/replit_integrations/chat/storage.ts`: изменён импорт с `@shared/schema` на `@shared/models/chat` для корректного доступа к таблицам `conversations` и `messages` с полями `conversationId`, `role`, `content`
+- Проверки на `response.data` в `server/replit_integrations/image/client.ts`: добавлены проверки на существование данных перед использованием
+- Проверки на `response.data` в `server/replit_integrations/image/routes.ts`: добавлена проверка и обработка ошибки при отсутствии данных
+
+---
+
 ## [2026-01-25] - UI: исправление заголовка колонки в графике работ
 ### Добавлено
 - Нет

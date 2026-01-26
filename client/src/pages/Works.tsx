@@ -81,17 +81,48 @@ export default function Works() {
     try {
       const buffer = await readFileAsArrayBuffer(file);
       const data = new Uint8Array(buffer);
-      const workbook = XLSX.read(data, { type: "array" });
+      
+      let workbook;
+      try {
+        workbook = XLSX.read(data, { type: "array" });
+      } catch (parseError) {
+        throw new Error(
+          language === "ru" 
+            ? "Не удалось прочитать Excel файл. Убедитесь, что файл не поврежден и имеет формат .xlsx или .xls"
+            : "Failed to read Excel file. Make sure the file is not corrupted and is in .xlsx or .xls format"
+        );
+      }
+      
+      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+        throw new Error(
+          language === "ru"
+            ? "Файл не содержит листов"
+            : "File contains no sheets"
+        );
+      }
+      
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
+      
+      if (!worksheet) {
+        throw new Error(
+          language === "ru"
+            ? "Не удалось прочитать первый лист файла"
+            : "Failed to read the first sheet of the file"
+        );
+      }
 
       // Header: 1 to get raw array of arrays
       const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
       console.log("Starting import of rows:", jsonRaw.length);
 
       const items = [];
+      let skippedCount = 0;
       for (const row of jsonRaw) {
-        if (!Array.isArray(row) || row.length < 5) continue;
+        if (!Array.isArray(row) || row.length < 5) {
+          skippedCount++;
+          continue;
+        }
 
         const codeRaw = row[1]; // № в ЛСР
         const descriptionRaw = row[2];
@@ -99,15 +130,35 @@ export default function Works() {
         const quantityRaw = row[4];
 
         // Skip technical header row (contains column numbers like 1, 2, 3...)
-        if (row[0] === 1 && row[1] === 2 && row[2] === 3) continue;
+        if (row[0] === 1 && row[1] === 2 && row[2] === 3) {
+          skippedCount++;
+          continue;
+        }
 
         const code = String(codeRaw ?? "").trim();
         const description = String(descriptionRaw ?? "").trim();
         const unit = String(unitRaw ?? "").trim();
-        const quantityTotal = String(quantityRaw ?? "0").trim();
+        const quantityRawStr = String(quantityRaw ?? "0").trim();
 
-        if (!code || !isValidWorkCode(code)) continue;
-        if (!description) continue;
+        if (!code || !isValidWorkCode(code)) {
+          skippedCount++;
+          continue;
+        }
+        if (!description) {
+          skippedCount++;
+          continue;
+        }
+        if (!unit) {
+          // unit is required (notNull in schema)
+          console.warn(`Skipping row with empty unit. Code: ${code}, Description: ${description}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Convert quantityTotal to number or null for numeric field
+        const quantityTotal = quantityRawStr === "" || quantityRawStr === "0" 
+          ? null 
+          : quantityRawStr;
 
         items.push({
           code,
@@ -117,6 +168,8 @@ export default function Works() {
           synonyms: [],
         });
       }
+
+      console.log(`Import parsing complete. Valid items: ${items.length}, Skipped rows: ${skippedCount}`);
 
       if (items.length === 0) {
         toast({

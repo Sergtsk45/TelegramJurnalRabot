@@ -63,17 +63,52 @@ const timesNewRoman = {
   bolditalics: path.join(fontsDir, "TimesNewRomanBoldItalic.ttf"),
 };
 
+const windowsFontsDir = "/mnt/c/Windows/Fonts";
+const timesNewRomanWindows = {
+  normal: path.join(windowsFontsDir, "times.ttf"),
+  bold: path.join(windowsFontsDir, "timesbd.ttf"),
+  italics: path.join(windowsFontsDir, "timesi.ttf"),
+  bolditalics: path.join(windowsFontsDir, "timesbi.ttf"),
+};
+
+function resolveTimesNewRomanOrFallback(): Record<
+  string,
+  { normal: string; bold: string; italics: string; bolditalics: string }
+> {
+  const localWanted = [timesNewRoman.normal, timesNewRoman.bold, timesNewRoman.italics, timesNewRoman.bolditalics];
+  const localOk = localWanted.every(fileExists);
+
+  if (localOk) {
+    return { TimesNewRoman: timesNewRoman };
+  }
+
+  const winWanted = [
+    timesNewRomanWindows.normal,
+    timesNewRomanWindows.bold,
+    timesNewRomanWindows.italics,
+    timesNewRomanWindows.bolditalics,
+  ];
+  const winOk = winWanted.every(fileExists);
+
+  if (winOk) {
+    console.warn(
+      `[AOSR] Font 'TimesNewRoman' not found in server/fonts. ` +
+        `Using Windows fonts from ${windowsFontsDir} (WSL).`,
+    );
+    return { TimesNewRoman: timesNewRomanWindows };
+  }
+
+  console.warn(
+    `[AOSR] Font 'TimesNewRoman' not found. Falling back to 'Roboto'. ` +
+      `Expected local: ${localWanted.map((p) => path.basename(p)).join(", ")}; ` +
+      `or Windows: ${winWanted.map((p) => path.basename(p)).join(", ")}`,
+  );
+  return { TimesNewRoman: roboto };
+}
+
 const fontDescriptors = {
   Roboto: roboto,
-  ...resolveFontOrFallback({
-    familyName: "TimesNewRoman",
-    ...timesNewRoman,
-    fallbackFamilyName: "Roboto",
-    fallbackNormal: roboto.normal,
-    fallbackBold: roboto.bold,
-    fallbackItalics: roboto.italics,
-    fallbackBolditalics: roboto.bolditalics,
-  }),
+  ...resolveTimesNewRomanOrFallback(),
 };
 
 const printer = new PdfPrinter(fontDescriptors);
@@ -280,8 +315,69 @@ export async function generateAosrPdf(data: ActData): Promise<Buffer> {
   const docDefinition = loadAosrTemplateDefinition();
   replacePlaceholdersDeep(docDefinition, buildAosrPlaceholderValues(data));
 
+  // Кастомный layout таблиц для "бланковых" подчёркиваний.
+  // ВАЖНО: в node-версии pdfmake кастомные layout'ы нужно передавать
+  // вторым аргументом в createPdfKitDocument, иначе layout-имя будет
+  // игнорироваться и применится дефолтная сетка/рамка.
+  const tableLayouts = {
+    thinUnderline: {
+      // Рисуем линию через layout (без явных border у ячеек)
+      defaultBorder: true,
+      hLineWidth: function (i: number, node: any) {
+        // Только нижняя линия (i === node.table.body.length)
+        return i === node.table.body.length ? 0.5 : 0;
+      },
+      vLineWidth: function () {
+        return 0;
+      },
+      hLineColor: function () {
+        return "#000000";
+      },
+      paddingLeft: function () {
+        return 0;
+      },
+      paddingRight: function () {
+        return 0;
+      },
+      paddingTop: function () {
+        return 2;
+      },
+      paddingBottom: function () {
+        return 2;
+      },
+    },
+    // Подчёркивание каждой строки таблицы (линия под каждой строкой),
+    // без рамок и без вертикальных линий.
+    rowUnderline: {
+      // Линии тоже через layout (без явных border у ячеек)
+      defaultBorder: true,
+      hLineWidth: function (i: number) {
+        // i=0 — верхняя линия (не нужна), дальше рисуем линию 0.5pt
+        return i === 0 ? 0 : 0.5;
+      },
+      vLineWidth: function () {
+        return 0;
+      },
+      hLineColor: function () {
+        return "#000000";
+      },
+      paddingLeft: function () {
+        return 0;
+      },
+      paddingRight: function () {
+        return 0;
+      },
+      paddingTop: function () {
+        return 2;
+      },
+      paddingBottom: function () {
+        return 2;
+      },
+    },
+  };
+
   try {
-    const pdfDoc = await printer.createPdfKitDocument(docDefinition);
+    const pdfDoc = await printer.createPdfKitDocument(docDefinition, { tableLayouts });
 
     return new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];

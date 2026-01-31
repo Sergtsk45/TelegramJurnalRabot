@@ -1,8 +1,71 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, date, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, date, numeric, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // === TABLE DEFINITIONS ===
+
+// Construction Objects (Объекты строительства)
+export const objects = pgTable("objects", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // e.g. "ЖК Северный, корпус 2"
+  address: text("address"),
+  city: text("city"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const objectParties = pgTable(
+  "object_parties",
+  {
+    id: serial("id").primaryKey(),
+    objectId: integer("object_id")
+      .notNull()
+      .references(() => objects.id),
+    role: text("role").notNull(), // customer | builder | designer (MVP)
+
+    fullName: text("full_name").notNull(),
+    shortName: text("short_name"),
+    inn: text("inn"),
+    kpp: text("kpp"),
+    ogrn: text("ogrn"),
+    // SRO (Саморегулируемая организация) details
+    sroFullName: text("sro_full_name"),
+    sroShortName: text("sro_short_name"),
+    sroOgrn: text("sro_ogrn"),
+    sroInn: text("sro_inn"),
+    addressLegal: text("address_legal"),
+    phone: text("phone"),
+    email: text("email"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    objectRoleUnique: uniqueIndex("object_parties_object_role_uq").on(t.objectId, t.role),
+  })
+);
+
+export const objectResponsiblePersons = pgTable(
+  "object_responsible_persons",
+  {
+    id: serial("id").primaryKey(),
+    objectId: integer("object_id")
+      .notNull()
+      .references(() => objects.id),
+    role: text("role").notNull(),
+
+    personName: text("person_name").notNull(),
+    position: text("position"),
+    basisText: text("basis_text"),
+    lineText: text("line_text"),
+    signText: text("sign_text"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    objectRoleUnique: uniqueIndex("object_responsible_persons_object_role_uq").on(t.objectId, t.role),
+  })
+);
 
 // Bill of Quantities (Ведомость объемов работ)
 export const works = pgTable("works", {
@@ -13,6 +76,98 @@ export const works = pgTable("works", {
   quantityTotal: numeric("quantity_total", { precision: 20, scale: 4 }), // Total planned quantity (numeric for floats)
   synonyms: jsonb("synonyms").$type<string[]>(), // Normalized synonyms for matching
 });
+
+// Estimates (Сметы / ЛСР)
+export const estimates = pgTable("estimates", {
+  id: serial("id").primaryKey(),
+  code: text("code"), // e.g. "ЛСР-02-01-03"
+  name: text("name").notNull(), // e.g. "Узлы учета и управления"
+
+  objectName: text("object_name"),
+  region: text("region"),
+  pricingQuarter: text("pricing_quarter"), // e.g. "II квартал 2024"
+
+  totalCost: numeric("total_cost", { precision: 20, scale: 4 }),
+  totalConstruction: numeric("total_construction", { precision: 20, scale: 4 }),
+  totalInstallation: numeric("total_installation", { precision: 20, scale: 4 }),
+  totalEquipment: numeric("total_equipment", { precision: 20, scale: 4 }),
+  totalOther: numeric("total_other", { precision: 20, scale: 4 }),
+
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const estimateSections = pgTable(
+  "estimate_sections",
+  {
+    id: serial("id").primaryKey(),
+    estimateId: integer("estimate_id")
+      .notNull()
+      .references(() => estimates.id),
+    number: text("number").notNull(), // e.g. "1"
+    title: text("title").notNull(), // e.g. "Узел управления (подвал)"
+    orderIndex: integer("order_index").notNull().default(0),
+  },
+  (t) => ({
+    estimateIdIdx: index("estimate_sections_estimate_id_idx").on(t.estimateId),
+    estimateSectionUnique: uniqueIndex("estimate_sections_estimate_number_uq").on(t.estimateId, t.number),
+  })
+);
+
+export const estimatePositions = pgTable(
+  "estimate_positions",
+  {
+    id: serial("id").primaryKey(),
+    estimateId: integer("estimate_id")
+      .notNull()
+      .references(() => estimates.id),
+    sectionId: integer("section_id").references(() => estimateSections.id),
+
+    lineNo: text("line_no").notNull(), // "1", "70.1"
+    code: text("code"), // ГЭСН/ФСБЦ/и т.п. (может отсутствовать у некоторых строк)
+    name: text("name").notNull(),
+    unit: text("unit"),
+    quantity: numeric("quantity", { precision: 20, scale: 4 }),
+
+    baseCostPerUnit: numeric("base_cost_per_unit", { precision: 20, scale: 4 }),
+    indexValue: numeric("index_value", { precision: 20, scale: 6 }),
+    currentCostPerUnit: numeric("current_cost_per_unit", { precision: 20, scale: 4 }),
+    totalCurrentCost: numeric("total_current_cost", { precision: 20, scale: 4 }),
+
+    notes: text("notes"),
+    orderIndex: integer("order_index").notNull().default(0),
+  },
+  (t) => ({
+    estimateIdIdx: index("estimate_positions_estimate_id_idx").on(t.estimateId),
+    sectionIdIdx: index("estimate_positions_section_id_idx").on(t.sectionId),
+    estimateLineNoIdx: index("estimate_positions_estimate_line_no_idx").on(t.estimateId, t.lineNo),
+  })
+);
+
+export const positionResources = pgTable(
+  "position_resources",
+  {
+    id: serial("id").primaryKey(),
+    positionId: integer("position_id")
+      .notNull()
+      .references(() => estimatePositions.id),
+
+    resourceCode: text("resource_code"),
+    resourceType: text("resource_type"), // ОТ, ЭМ, М, Н и т.п.
+    name: text("name").notNull(),
+    unit: text("unit"),
+    quantity: numeric("quantity", { precision: 20, scale: 4 }),
+    quantityTotal: numeric("quantity_total", { precision: 20, scale: 4 }),
+
+    baseCostPerUnit: numeric("base_cost_per_unit", { precision: 20, scale: 4 }),
+    currentCostPerUnit: numeric("current_cost_per_unit", { precision: 20, scale: 4 }),
+    totalCurrentCost: numeric("total_current_cost", { precision: 20, scale: 4 }),
+
+    orderIndex: integer("order_index").notNull().default(0),
+  },
+  (t) => ({
+    positionIdIdx: index("position_resources_position_id_idx").on(t.positionId),
+  })
+);
 
 // Messages (Raw and Normalized)
 export const messages = pgTable("messages", {
@@ -38,6 +193,7 @@ export const messages = pgTable("messages", {
 // Acts (AOSR)
 export const acts = pgTable("acts", {
   id: serial("id").primaryKey(),
+  objectId: integer("object_id").references(() => objects.id),
   // Global act number (business identifier). Nullable for legacy records.
   actNumber: integer("act_number").unique(),
   dateStart: date("date_start"),
@@ -124,6 +280,17 @@ export const scheduleTasks = pgTable(
 // === SCHEMAS ===
 
 export const insertWorkSchema = createInsertSchema(works).omit({ id: true });
+export const insertEstimateSchema = createInsertSchema(estimates).omit({ id: true, createdAt: true });
+export const insertEstimateSectionSchema = createInsertSchema(estimateSections).omit({ id: true });
+export const insertEstimatePositionSchema = createInsertSchema(estimatePositions).omit({ id: true });
+export const insertPositionResourceSchema = createInsertSchema(positionResources).omit({ id: true });
+export const insertObjectSchema = createInsertSchema(objects).omit({ id: true, createdAt: true });
+export const insertObjectPartySchema = createInsertSchema(objectParties).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertObjectResponsiblePersonSchema = createInsertSchema(objectResponsiblePersons).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true, isProcessed: true, normalizedData: true });
 export const insertActSchema = createInsertSchema(acts).omit({ id: true, createdAt: true });
 export const insertAttachmentSchema = createInsertSchema(attachments).omit({ id: true, createdAt: true });
@@ -136,6 +303,24 @@ export const insertScheduleTaskSchema = createInsertSchema(scheduleTasks).omit({
 
 export type Work = typeof works.$inferSelect;
 export type InsertWork = z.infer<typeof insertWorkSchema>;
+
+export type Estimate = typeof estimates.$inferSelect;
+export type InsertEstimate = z.infer<typeof insertEstimateSchema>;
+export type EstimateSection = typeof estimateSections.$inferSelect;
+export type InsertEstimateSection = z.infer<typeof insertEstimateSectionSchema>;
+export type EstimatePosition = typeof estimatePositions.$inferSelect;
+export type InsertEstimatePosition = z.infer<typeof insertEstimatePositionSchema>;
+export type PositionResource = typeof positionResources.$inferSelect;
+export type InsertPositionResource = z.infer<typeof insertPositionResourceSchema>;
+
+export type Object = typeof objects.$inferSelect;
+export type InsertObject = z.infer<typeof insertObjectSchema>;
+
+export type ObjectParty = typeof objectParties.$inferSelect;
+export type InsertObjectParty = z.infer<typeof insertObjectPartySchema>;
+
+export type ObjectResponsiblePerson = typeof objectResponsiblePersons.$inferSelect;
+export type InsertObjectResponsiblePerson = z.infer<typeof insertObjectResponsiblePersonSchema>;
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;

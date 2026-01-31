@@ -10,6 +10,7 @@ import WorkLog from "@/pages/WorkLog";
 import Acts from "@/pages/Acts";
 import Schedule from "@/pages/Schedule";
 import Settings from "@/pages/Settings";
+import SourceData from "@/pages/SourceData";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/worklog" component={WorkLog} />
       <Route path="/acts" component={Acts} />
       <Route path="/schedule" component={Schedule} />
+      <Route path="/source-data" component={SourceData} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

@@ -9,6 +9,7 @@
 
 ## Ключевые сценарии (как сейчас)
 - **Импорт ВОР из Excel**: пользователь загружает `.xlsx`, клиент парсит файл и отправляет позиции на сервер одним запросом `POST /api/works/import` в режиме **merge** (без авто-удаления данных).
+- **Импорт Сметы/ЛСР из Excel (ГРАНД‑Смета)**: на экране `/works` пользователь переключается в режим “Смета”, загружает `.xlsx`; клиент парсит выгрузку (поиск строки заголовка `№ п/п / Обоснование / Наименование работ и затрат`, разбор позиций/ресурсов) и отправляет JSON на `POST /api/estimates/import`. Смета хранится отдельными таблицами и отображается на вкладке ВОР.
 - **Журнал работ**: пользователь отправляет сообщение о выполненной работе; сервер сохраняет raw-текст и пытается извлечь структуру через OpenAI (workCode/quantity/date/location и т.д.).
 - **Генерация акта (legacy)**: по диапазону дат выбираются обработанные сообщения, группируются по `workCode`, суммируются количества и создаётся запись акта.
 - **Генерация актов из графика работ (новое)**: на экране `/schedule` каждой задаче задаётся номер принадлежности `actNumber`. По кнопке “Сформировать/обновить акты из графика” сервер группирует задачи по `actNumber`, вычисляет `dateStart/dateEnd` и формирует `worksData` (агрегация по `workId`, quantity — из `works.quantityTotal`).
@@ -34,6 +35,7 @@ flowchart LR
 
   subgraph Data
     DB --> W[works (BoQ)]
+    DB --> E[estimates (LSR)]
     DB --> M[messages (raw + normalized)]
     DB --> A[acts (aggregated)]
     DB --> AT[attachments]
@@ -62,13 +64,20 @@ flowchart LR
 - `shared/` — общий код для frontend/backend
   - `shared/schema.ts` — Drizzle таблицы + Zod-схемы/типы.
   - `shared/routes.ts` — контракт API (пути, методы, схемы).
+- `attached_assets/GESN/` — утилита для парсинга справочников ГЭСН (PDF → SQLite) на Python.
+  - Скрипт: `attached_assets/GESN/gesn_pdf_to_sqlite.py`
+  - Результат: SQLite-файл (`--db`) и лог (`--log`). При относительном пути файлы сохраняются рядом со скриптом (в `attached_assets/GESN/`).
 
 ## Модель данных (текущее состояние)
 Основные таблицы:
 - `objects`: объект строительства (MVP: один «текущий объект»), используется как якорь для исходных данных плейсхолдеров.
-- `object_parties`: стороны объекта (заказчик/подрядчик/проектировщик) с реквизитами (минимум — `fullName`).
+- `object_parties`: стороны объекта (заказчик/подрядчик/проектировщик) с реквизитами (минимум — `fullName`, дополнительно — ИНН/КПП/ОГРН, юр.адрес, телефон, email, реквизиты СРО). Эти данные используются при экспорте АОСР в PDF (если не переопределены через `formData`).
 - `object_responsible_persons`: ответственные лица/подписанты по ролям (ФИО/должность/основание + опционально line/sign).
 - `works`: позиции ВОР/ВОИР (код, описание, единицы, плановый объём, синонимы).
+- `estimates`: шапка сметы/ЛСР (код, название, регион/квартал, итоги) — импортируется из Excel-выгрузки ГРАНД‑Сметы.
+- `estimate_sections`: разделы сметы (номер/название) — опционально (если файл содержит “Раздел N...”).
+- `estimate_positions`: позиции сметы (№ п/п, обоснование/шифр, наименование, ед. изм., количество, суммы/примечания).
+- `position_resources`: ресурсы внутри позиции сметы (код/тип, наименование, ед. изм., количество, суммы).
 - `messages`: исходный текст, нормализованные поля (json), флаги обработки.
 - `acts`: акты (глобальный номер акта `actNumber`, период `dateStart/dateEnd`, локация, статус, агрегированные работы в `worksData` (json)) + `objectId` (FK → `objects.id`, может быть `NULL` для legacy).
 - `attachments`: вложения к актам (url/name/type).
@@ -84,6 +93,7 @@ flowchart LR
 Текущие ресурсы:
 - **Object (MVP current)**: `GET /api/object/current`, `PATCH /api/object/current`, `GET /api/object/current/source-data`, `PUT /api/object/current/source-data`
 - **Works**: `GET /api/works`, `POST /api/works`
+- **Estimates (Смета/ЛСР)**: `GET /api/estimates`, `GET /api/estimates/:id`, `POST /api/estimates/import`, `DELETE /api/estimates/:id`
 - **Messages**: `GET /api/messages`, `POST /api/messages`
 - **Acts**: `GET /api/acts`, `POST /api/acts/generate` (legacy), `GET /api/acts/:id`, `POST /api/acts/create-with-templates` (legacy), `POST /api/acts/:id/export`
 - **Act Templates**: `GET /api/act-templates`
@@ -114,7 +124,15 @@ flowchart LR
 - `npm run build` — сборка в `dist/`.
 - `npm run start` — запуск прод-сборки.
 - `npm run check` — TypeScript проверки.
-- `npm run db:push` — применение схемы Drizzle к БД.
+- `npm run db:migrate` — применение SQL-миграций из `migrations/` (**единственный допустимый способ изменения БД**).
+
+**Не использовать:** `npm run db:push` — применение схемы Drizzle к БД. В проекте принят вариант B (SQL-миграции); `db:push` не синхронизирован с историей миграций и может привести к рассинхрону. См. `docs/db-migrations.md`.
+
+## Миграции БД
+Единственный допустимый процесс изменения БД: **SQL-миграции** (вариант B).
+
+См. документ:
+- `docs/db-migrations.md`
 
 ## Текущее состояние и ограничения (важно для планирования)
 - Импорт Excel парсится на **клиенте**, но отправляется на сервер **одним bulk-запросом** `POST /api/works/import` (без авто-очистки).

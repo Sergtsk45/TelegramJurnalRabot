@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
-import { generateAosrPdf, loadTemplateCatalog, type ActData } from "./pdfGenerator";
+import { buildActDataFromSourceData, generateAosrPdf, loadTemplateCatalog, type ActData } from "./pdfGenerator";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -72,10 +72,113 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // Object (MVP: single current object)
+  app.get(api.object.current.path, async (_req, res) => {
+    const obj = await storage.getOrCreateDefaultObject();
+    return res.status(200).json(obj);
+  });
+
+  app.patch(api.object.patchCurrent.path, async (req, res) => {
+    try {
+      const patch = api.object.patchCurrent.input.parse(req.body);
+      const obj = await storage.getOrCreateDefaultObject();
+      const updated = await storage.updateObject(obj.id, patch);
+      return res.status(200).json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Object patch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.get(api.object.getSourceData.path, async (_req, res) => {
+    try {
+      const obj = await storage.getOrCreateDefaultObject();
+      const data = await storage.getObjectSourceData(obj.id);
+      return res.status(200).json(data);
+    } catch (err) {
+      if (err instanceof Error && err.message === "OBJECT_NOT_FOUND") {
+        return res.status(404).json({ message: "Object not found" });
+      }
+      console.error("Get source-data failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.put(api.object.putSourceData.path, async (req, res) => {
+    try {
+      const input = api.object.putSourceData.input.parse(req.body);
+      const obj = await storage.getOrCreateDefaultObject();
+      const saved = await storage.saveObjectSourceData(obj.id, input);
+      return res.status(200).json(saved);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      if (err instanceof Error && err.message === "OBJECT_NOT_FOUND") {
+        return res.status(404).json({ message: "Object not found" });
+      }
+      console.error("Put source-data failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
   // Works (BoQ)
   app.get(api.works.list.path, async (req, res) => {
     const works = await storage.getWorks();
     res.json(works);
+  });
+
+  // Estimates (Сметы / ЛСР)
+  app.get(api.estimates.list.path, async (_req, res) => {
+    const list = await storage.getEstimates();
+    return res.status(200).json(list);
+  });
+
+  app.get(api.estimates.get.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+
+    const data = await storage.getEstimateWithDetails(id);
+    if (!data) {
+      return res.status(404).json({ message: "Not found" });
+    }
+
+    return res.status(200).json(data);
+  });
+
+  app.post(api.estimates.import.path, async (req, res) => {
+    try {
+      const input = api.estimates.import.input.parse(req.body);
+      const result = await storage.importEstimate(input as any);
+      return res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Estimates import failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.delete(api.estimates.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+
+    try {
+      const ok = await storage.deleteEstimate(id);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      return res.status(204).send();
+    } catch (err) {
+      console.error("Delete estimate failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
   });
 
   // Works: safe bulk import (no destructive behavior by default)
@@ -511,6 +614,11 @@ export async function registerRoutes(
 
       const { templateIds, formData } = req.body ?? {};
 
+      // Resolve object-scoped source data (MVP: single current object)
+      const objectId = (act as any).objectId ?? (await storage.getOrCreateDefaultObject()).id;
+      const sourceData = await storage.getObjectSourceData(Number(objectId));
+      const objectActData = buildActDataFromSourceData(sourceData);
+
       // Allow exporting without explicit templates (for acts generated from schedule).
       // Strategy:
       // - if templateIds provided -> use them
@@ -549,45 +657,46 @@ export async function registerRoutes(
             : "";
 
         const actData: ActData = {
+          ...objectActData,
           actNumber,
           actDate,
-          city: formData?.city || "Москва",
-          objectName: formData?.objectName || "Объект строительства",
-          objectAddress: formData?.objectAddress || act.location || "Адрес объекта",
+          city: formData?.city ?? objectActData.city ?? "Москва",
+          objectName: formData?.objectName ?? objectActData.objectName ?? "Объект строительства",
+          objectAddress: formData?.objectAddress ?? objectActData.objectAddress ?? act.location ?? "Адрес объекта",
           workDescription: formData?.workDescription || "Работы по акту (из графика)",
           dateStart: act.dateStart || new Date().toISOString().split("T")[0],
           dateEnd: act.dateEnd || new Date().toISOString().split("T")[0],
           p1Works,
 
           // эталонные поля (005_АОСР 4)
-          objectFullName: formData?.objectFullName,
-          developerOrgFull: formData?.developerOrgFull,
-          builderOrgFull: formData?.builderOrgFull,
-          designerOrgFull: formData?.designerOrgFull,
-          repCustomerControlLine: formData?.repCustomerControlLine,
-          repCustomerControlOrder: formData?.repCustomerControlOrder,
-          repBuilderLine: formData?.repBuilderLine,
-          repBuilderOrder: formData?.repBuilderOrder,
-          repBuilderControlLine: formData?.repBuilderControlLine,
-          repBuilderControlOrder: formData?.repBuilderControlOrder,
-          repDesignerLine: formData?.repDesignerLine,
-          repDesignerOrder: formData?.repDesignerOrder,
-          repWorkPerformerLine: formData?.repWorkPerformerLine,
-          repWorkPerformerOrder: formData?.repWorkPerformerOrder,
-          p2ProjectDocs: formData?.p2ProjectDocs,
-          p3MaterialsText: formData?.p3MaterialsText,
-          p4AsBuiltDocs: formData?.p4AsBuiltDocs,
-          p6NormativeRefs: formData?.p6NormativeRefs,
-          p7NextWorks: formData?.p7NextWorks,
-          additionalInfo: formData?.additionalInfo,
-          copiesCount: formData?.copiesCount,
+          objectFullName: formData?.objectFullName ?? objectActData.objectFullName,
+          developerOrgFull: formData?.developerOrgFull ?? objectActData.developerOrgFull,
+          builderOrgFull: formData?.builderOrgFull ?? objectActData.builderOrgFull,
+          designerOrgFull: formData?.designerOrgFull ?? objectActData.designerOrgFull,
+          repCustomerControlLine: formData?.repCustomerControlLine ?? objectActData.repCustomerControlLine,
+          repCustomerControlOrder: formData?.repCustomerControlOrder ?? objectActData.repCustomerControlOrder,
+          repBuilderLine: formData?.repBuilderLine ?? objectActData.repBuilderLine,
+          repBuilderOrder: formData?.repBuilderOrder ?? objectActData.repBuilderOrder,
+          repBuilderControlLine: formData?.repBuilderControlLine ?? objectActData.repBuilderControlLine,
+          repBuilderControlOrder: formData?.repBuilderControlOrder ?? objectActData.repBuilderControlOrder,
+          repDesignerLine: formData?.repDesignerLine ?? objectActData.repDesignerLine,
+          repDesignerOrder: formData?.repDesignerOrder ?? objectActData.repDesignerOrder,
+          repWorkPerformerLine: formData?.repWorkPerformerLine ?? objectActData.repWorkPerformerLine,
+          repWorkPerformerOrder: formData?.repWorkPerformerOrder ?? objectActData.repWorkPerformerOrder,
+          p2ProjectDocs: formData?.p2ProjectDocs ?? objectActData.p2ProjectDocs,
+          p3MaterialsText: formData?.p3MaterialsText ?? objectActData.p3MaterialsText,
+          p4AsBuiltDocs: formData?.p4AsBuiltDocs ?? objectActData.p4AsBuiltDocs,
+          p6NormativeRefs: formData?.p6NormativeRefs ?? objectActData.p6NormativeRefs,
+          p7NextWorks: formData?.p7NextWorks ?? objectActData.p7NextWorks,
+          additionalInfo: formData?.additionalInfo ?? objectActData.additionalInfo,
+          copiesCount: formData?.copiesCount ?? objectActData.copiesCount,
           attachments: Array.isArray(formData?.attachments) ? formData.attachments : undefined,
-          attachmentsText: formData?.attachmentsText,
-          sigCustomerControl: formData?.sigCustomerControl,
-          sigBuilder: formData?.sigBuilder,
-          sigBuilderControl: formData?.sigBuilderControl,
-          sigDesigner: formData?.sigDesigner,
-          sigWorkPerformer: formData?.sigWorkPerformer,
+          attachmentsText: formData?.attachmentsText ?? objectActData.attachmentsText,
+          sigCustomerControl: formData?.sigCustomerControl ?? objectActData.sigCustomerControl,
+          sigBuilder: formData?.sigBuilder ?? objectActData.sigBuilder,
+          sigBuilderControl: formData?.sigBuilderControl ?? objectActData.sigBuilderControl,
+          sigDesigner: formData?.sigDesigner ?? objectActData.sigDesigner,
+          sigWorkPerformer: formData?.sigWorkPerformer ?? objectActData.sigWorkPerformer,
         };
 
         const pdfBuffer = await generateAosrPdf(actData);
@@ -606,61 +715,62 @@ export async function registerRoutes(
 
         // Build act data from form and database
         const actData: ActData = {
+          ...objectActData,
           actNumber: formData?.actNumber || String(act.actNumber ?? act.id),
           // "Дата составления" по умолчанию = дата окончания акта (если есть)
           actDate: formData?.actDate || String(act.dateEnd ?? new Date().toISOString().split("T")[0]),
 
           // legacy fields (оставляем для обратной совместимости/фолбэков)
-          city: formData?.city || "Москва",
-          objectName: formData?.objectName || "Объект строительства",
-          objectAddress: formData?.objectAddress || act.location || "Адрес объекта",
-          developerRepName: formData?.developerRepName || "",
-          developerRepPosition: formData?.developerRepPosition || "",
-          contractorRepName: formData?.contractorRepName || "",
-          contractorRepPosition: formData?.contractorRepPosition || "",
-          supervisorRepName: formData?.supervisorRepName || "",
-          supervisorRepPosition: formData?.supervisorRepPosition || "",
+          city: formData?.city ?? objectActData.city ?? "Москва",
+          objectName: formData?.objectName ?? objectActData.objectName ?? "Объект строительства",
+          objectAddress: formData?.objectAddress ?? objectActData.objectAddress ?? act.location ?? "Адрес объекта",
+          developerRepName: formData?.developerRepName || objectActData.developerRepName || "",
+          developerRepPosition: formData?.developerRepPosition || objectActData.developerRepPosition || "",
+          contractorRepName: formData?.contractorRepName || objectActData.contractorRepName || "",
+          contractorRepPosition: formData?.contractorRepPosition || objectActData.contractorRepPosition || "",
+          supervisorRepName: formData?.supervisorRepName || objectActData.supervisorRepName || "",
+          supervisorRepPosition: formData?.supervisorRepPosition || objectActData.supervisorRepPosition || "",
 
           workDescription: template.description || template.title,
-          projectDocumentation: formData?.projectDocumentation || "Рабочая документация",
+          projectDocumentation: formData?.projectDocumentation || objectActData.projectDocumentation || "Рабочая документация",
           dateStart: act.dateStart || new Date().toISOString().split("T")[0],
           dateEnd: act.dateEnd || new Date().toISOString().split("T")[0],
           qualityDocuments: formData?.qualityDocuments || "Сертификаты, паспорта качества",
           materials: formData?.materials,
 
           // эталонные поля (005_АОСР 4)
-          objectFullName: formData?.objectFullName,
-          developerOrgFull: formData?.developerOrgFull,
-          builderOrgFull: formData?.builderOrgFull,
-          designerOrgFull: formData?.designerOrgFull,
+          objectFullName: formData?.objectFullName ?? objectActData.objectFullName,
+          developerOrgFull: formData?.developerOrgFull ?? objectActData.developerOrgFull,
+          builderOrgFull: formData?.builderOrgFull ?? objectActData.builderOrgFull,
+          designerOrgFull: formData?.designerOrgFull ?? objectActData.designerOrgFull,
 
-          repCustomerControlLine: formData?.repCustomerControlLine,
-          repCustomerControlOrder: formData?.repCustomerControlOrder,
-          repBuilderLine: formData?.repBuilderLine,
-          repBuilderOrder: formData?.repBuilderOrder,
-          repBuilderControlLine: formData?.repBuilderControlLine,
-          repBuilderControlOrder: formData?.repBuilderControlOrder,
-          repDesignerLine: formData?.repDesignerLine,
-          repDesignerOrder: formData?.repDesignerOrder,
-          repWorkPerformerLine: formData?.repWorkPerformerLine,
-          repWorkPerformerOrder: formData?.repWorkPerformerOrder,
+          repCustomerControlLine: formData?.repCustomerControlLine ?? objectActData.repCustomerControlLine,
+          repCustomerControlOrder: formData?.repCustomerControlOrder ?? objectActData.repCustomerControlOrder,
+          repBuilderLine: formData?.repBuilderLine ?? objectActData.repBuilderLine,
+          repBuilderOrder: formData?.repBuilderOrder ?? objectActData.repBuilderOrder,
+          repBuilderControlLine: formData?.repBuilderControlLine ?? objectActData.repBuilderControlLine,
+          repBuilderControlOrder: formData?.repBuilderControlOrder ?? objectActData.repBuilderControlOrder,
+          repDesignerLine: formData?.repDesignerLine ?? objectActData.repDesignerLine,
+          repDesignerOrder: formData?.repDesignerOrder ?? objectActData.repDesignerOrder,
+          repWorkPerformerLine: formData?.repWorkPerformerLine ?? objectActData.repWorkPerformerLine,
+          repWorkPerformerOrder: formData?.repWorkPerformerOrder ?? objectActData.repWorkPerformerOrder,
 
-          p2ProjectDocs: formData?.p2ProjectDocs,
-          p3MaterialsText: formData?.p3MaterialsText,
-          p4AsBuiltDocs: formData?.p4AsBuiltDocs,
-          p6NormativeRefs: formData?.p6NormativeRefs,
-          p7NextWorks: formData?.p7NextWorks,
-          additionalInfo: formData?.additionalInfo,
-          copiesCount: formData?.copiesCount,
+          p2ProjectDocs: formData?.p2ProjectDocs ?? objectActData.p2ProjectDocs,
+          p3MaterialsText: formData?.p3MaterialsText ?? objectActData.p3MaterialsText,
+          p4AsBuiltDocs: formData?.p4AsBuiltDocs ?? objectActData.p4AsBuiltDocs,
+          p6NormativeRefs: formData?.p6NormativeRefs ?? objectActData.p6NormativeRefs,
+          p7NextWorks: formData?.p7NextWorks ?? objectActData.p7NextWorks,
+          additionalInfo: formData?.additionalInfo ?? objectActData.additionalInfo,
+          copiesCount: formData?.copiesCount ?? objectActData.copiesCount,
 
           attachments: Array.isArray(formData?.attachments) ? formData.attachments : undefined,
-          attachmentsText: formData?.attachmentsText,
+          attachmentsText: formData?.attachmentsText ?? objectActData.attachmentsText,
 
-          sigCustomerControl: formData?.sigCustomerControl,
-          sigBuilder: formData?.sigBuilder,
-          sigBuilderControl: formData?.sigBuilderControl,
-          sigDesigner: formData?.sigDesigner,
-          sigWorkPerformer: formData?.sigWorkPerformer,
+          sigCustomerControl: formData?.sigCustomerControl ?? objectActData.sigCustomerControl,
+          sigBuilder: formData?.sigBuilder ?? objectActData.sigBuilder,
+          sigBuilderControl: formData?.sigBuilderControl ?? objectActData.sigBuilderControl,
+          sigDesigner: formData?.sigDesigner ?? objectActData.sigDesigner,
+          sigWorkPerformer: formData?.sigWorkPerformer ?? objectActData.sigWorkPerformer,
         };
 
         try {

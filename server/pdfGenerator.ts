@@ -2,6 +2,7 @@ import type { TDocumentDefinitions } from "pdfmake/interfaces";
 import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
+import type { PartyDto, PersonDto, SourceDataDto } from "@shared/routes";
 
 const require = createRequire(import.meta.url);
 const PdfPrinter = require("pdfmake/js/Printer.js").default;
@@ -142,6 +143,123 @@ export interface ActData {
     quantity: string;
     qualityDoc: string;
   }>;
+}
+
+function buildRepLine(person: PersonDto | undefined): string | undefined {
+  const lineText = person?.lineText?.trim();
+  if (lineText) return lineText;
+  const parts = [person?.position?.trim(), person?.personName?.trim()].filter(Boolean) as string[];
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+function buildSig(person: PersonDto | undefined): string | undefined {
+  const signText = person?.signText?.trim();
+  if (signText) return signText;
+  const name = person?.personName?.trim();
+  return name || undefined;
+}
+
+function buildOrder(person: PersonDto | undefined): string | undefined {
+  const basisText = person?.basisText?.trim();
+  return basisText || undefined;
+}
+
+function buildOrg(party: PartyDto | undefined): string | undefined {
+  const fullName = party?.fullName?.trim();
+  if (!fullName) return undefined;
+
+  const inn = party?.inn?.trim();
+  const kpp = party?.kpp?.trim();
+  const ogrn = party?.ogrn?.trim();
+  const addressLegal = party?.addressLegal?.trim();
+  const phone = party?.phone?.trim();
+  const sroFullName = party?.sroFullName?.trim();
+  const sroOgrn = party?.sroOgrn?.trim();
+  const sroInn = party?.sroInn?.trim();
+
+  // “Бланковый” формат (удобен для PDF): одна сущность = несколько строк.
+  // Пустые поля не выводим.
+  const lines: string[] = [fullName];
+
+  if (ogrn) lines.push(`ОГРН: ${ogrn}`);
+
+  if (inn && kpp) lines.push(`ИНН/КПП: ${inn}/${kpp}`);
+  else if (inn) lines.push(`ИНН: ${inn}`);
+  else if (kpp) lines.push(`КПП: ${kpp}`);
+
+  if (addressLegal) lines.push(`Адрес (место нахождения): ${addressLegal}`);
+  if (phone) lines.push(`Тел./факс: ${phone}`);
+
+  if (sroFullName || sroOgrn || sroInn) {
+    const sroParts: string[] = [];
+    if (sroFullName) sroParts.push(sroFullName);
+    if (sroOgrn) sroParts.push(`ОГРН ${sroOgrn}`);
+    if (sroInn) sroParts.push(`ИНН ${sroInn}`);
+    lines.push(`СРО: ${sroParts.join(", ")}`.trim());
+  }
+
+  return lines.join("\n");
+}
+
+export function buildActDataFromSourceData(sourceData: SourceDataDto): Partial<ActData> {
+  const objectName = sourceData.object.title?.trim() || undefined;
+  const objectAddress = sourceData.object.address?.trim() || undefined;
+
+  const objectFullName =
+    objectName && objectAddress
+      ? `${objectName} по адресу: ${objectAddress}`
+      : objectName || objectAddress || undefined;
+
+  const developerOrgFull = buildOrg(sourceData.parties.customer);
+  const builderOrgFull = buildOrg(sourceData.parties.builder);
+  const designerOrgFull = buildOrg(sourceData.parties.designer);
+
+  const repCustomerControl = sourceData.persons.rep_customer_control;
+  const repBuilder = sourceData.persons.rep_builder;
+  const repBuilderControl = sourceData.persons.rep_builder_control;
+  const repDesigner = sourceData.persons.rep_designer;
+  const repWorkPerformer = sourceData.persons.rep_work_performer;
+
+  return {
+    // legacy (для обратной совместимости и для фолбэков в buildAosrPlaceholderValues)
+    city: sourceData.object.city?.trim() || undefined,
+    objectName,
+    objectAddress,
+    developerRepName: sourceData.persons.developer_rep.personName?.trim() || undefined,
+    developerRepPosition: sourceData.persons.developer_rep.position?.trim() || undefined,
+    contractorRepName: sourceData.persons.contractor_rep.personName?.trim() || undefined,
+    contractorRepPosition: sourceData.persons.contractor_rep.position?.trim() || undefined,
+    supervisorRepName: sourceData.persons.supervisor_rep.personName?.trim() || undefined,
+    supervisorRepPosition: sourceData.persons.supervisor_rep.position?.trim() || undefined,
+
+    // эталонные поля
+    objectFullName,
+    developerOrgFull,
+    builderOrgFull,
+    designerOrgFull,
+
+    repCustomerControlLine: buildRepLine(repCustomerControl),
+    repCustomerControlOrder: buildOrder(repCustomerControl),
+    sigCustomerControl: buildSig(repCustomerControl),
+
+    repBuilderLine: buildRepLine(repBuilder),
+    repBuilderOrder: buildOrder(repBuilder),
+    sigBuilder: buildSig(repBuilder),
+
+    repBuilderControlLine: buildRepLine(repBuilderControl),
+    repBuilderControlOrder: buildOrder(repBuilderControl),
+    sigBuilderControl: buildSig(repBuilderControl),
+
+    repDesignerLine: buildRepLine(repDesigner),
+    repDesignerOrder: buildOrder(repDesigner),
+    sigDesigner: buildSig(repDesigner),
+
+    repWorkPerformerLine: buildRepLine(repWorkPerformer),
+    repWorkPerformerOrder: buildOrder(repWorkPerformer),
+    sigWorkPerformer: buildSig(repWorkPerformer),
+
+    worksPerformedByOrg: builderOrgFull,
+  };
 }
 
 function formatDate(dateStr: string): string {

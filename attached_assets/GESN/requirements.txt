@@ -1,0 +1,9 @@
+# /**
+#  * @file: requirements.txt
+#  * @description: Зависимости для парсера ГЭСН (PDF → SQLite)
+#  * @dependencies: pdfplumber
+#  * @created: 2026-01-30
+#  */
+#
+# ГЭСН PDF → SQLite parser dependencies
+pdfplumber>=0.10.0

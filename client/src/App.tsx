@@ -11,6 +11,9 @@ import Acts from "@/pages/Acts";
 import Schedule from "@/pages/Schedule";
 import Settings from "@/pages/Settings";
 import SourceData from "@/pages/SourceData";
+import SourceMaterials from "@/pages/SourceMaterials";
+import SourceMaterialDetail from "@/pages/SourceMaterialDetail";
+import SourceDocuments from "@/pages/SourceDocuments";
 
 function Router() {
   return (
@@ -21,6 +24,9 @@ function Router() {
       <Route path="/acts" component={Acts} />
       <Route path="/schedule" component={Schedule} />
       <Route path="/source-data" component={SourceData} />
+      <Route path="/source/materials" component={SourceMaterials} />
+      <Route path="/source/materials/:id" component={SourceMaterialDetail} />
+      <Route path="/source/documents" component={SourceDocuments} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

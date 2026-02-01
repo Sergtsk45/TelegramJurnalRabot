@@ -1,4 +1,19 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, date, numeric, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  pgTable,
+  text,
+  serial,
+  integer,
+  boolean,
+  timestamp,
+  jsonb,
+  date,
+  numeric,
+  bigint,
+  index,
+  uniqueIndex,
+  check,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -219,6 +234,192 @@ export const attachments = pgTable("attachments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === Materials & Documents (Source Data module) ===
+
+export const materialsCatalog = pgTable(
+  "materials_catalog",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    name: text("name").notNull(),
+    category: text("category"), // material | equipment | product
+    standardRef: text("standard_ref"),
+    baseUnit: text("base_unit"),
+    params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => ({
+    nameIdx: index("materials_catalog_name_idx").on(t.name),
+    uniqueName: uniqueIndex("materials_catalog_name_uniq").on(t.name).where(sql`deleted_at IS NULL`),
+    categoryCheck: check(
+      "materials_catalog_category_check",
+      sql`category IN ('material', 'equipment', 'product') OR category IS NULL`,
+    ),
+  })
+);
+
+export const projectMaterials = pgTable(
+  "project_materials",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    objectId: integer("object_id")
+      .notNull()
+      .references(() => objects.id, { onDelete: "restrict" }),
+    catalogMaterialId: bigint("catalog_material_id", { mode: "number" }).references(() => materialsCatalog.id, {
+      onDelete: "set null",
+    }),
+    nameOverride: text("name_override"),
+    baseUnitOverride: text("base_unit_override"),
+    paramsOverride: jsonb("params_override").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => ({
+    objectIdIdx: index("project_materials_object_id_idx").on(t.objectId),
+    catalogIdIdx: index("project_materials_catalog_id_idx").on(t.catalogMaterialId),
+  })
+);
+
+export const materialBatches = pgTable(
+  "material_batches",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    objectId: integer("object_id")
+      .notNull()
+      .references(() => objects.id, { onDelete: "restrict" }),
+    projectMaterialId: bigint("project_material_id", { mode: "number" })
+      .notNull()
+      .references(() => projectMaterials.id, { onDelete: "cascade" }),
+    supplierName: text("supplier_name"),
+    manufacturer: text("manufacturer"),
+    plant: text("plant"),
+    batchNumber: text("batch_number"),
+    deliveryDate: date("delivery_date"),
+    quantity: numeric("quantity", { precision: 14, scale: 3 }),
+    unit: text("unit"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    projectMaterialIdIdx: index("material_batches_project_material_id_idx").on(t.projectMaterialId),
+    quantityCheck: check("material_batches_quantity_check", sql`quantity IS NULL OR quantity >= 0`),
+  })
+);
+
+export const documents = pgTable(
+  "documents",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    docType: text("doc_type").notNull(),
+    scope: text("scope").notNull().default("project"),
+    title: text("title"),
+    docNumber: text("doc_number"),
+    docDate: date("doc_date"),
+    issuer: text("issuer"),
+    validFrom: date("valid_from"),
+    validTo: date("valid_to"),
+    meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
+    fileUrl: text("file_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => ({
+    docTypeIdx: index("documents_doc_type_idx").on(t.docType),
+    scopeIdx: index("documents_scope_idx").on(t.scope),
+    docNumberIdx: index("documents_doc_number_idx").on(t.docNumber),
+    docTypeCheck: check(
+      "documents_doc_type_check",
+      sql`doc_type IN ('certificate', 'declaration', 'passport', 'protocol', 'scheme', 'other')`,
+    ),
+    scopeCheck: check("documents_scope_check", sql`scope IN ('global', 'project')`),
+    validDatesCheck: check(
+      "documents_valid_dates_check",
+      sql`valid_from IS NULL OR valid_to IS NULL OR valid_from <= valid_to`,
+    ),
+  })
+);
+
+export const documentBindings = pgTable(
+  "document_bindings",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    documentId: bigint("document_id", { mode: "number" })
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    objectId: integer("object_id").references(() => objects.id, { onDelete: "cascade" }),
+    projectMaterialId: bigint("project_material_id", { mode: "number" }).references(() => projectMaterials.id, {
+      onDelete: "cascade",
+    }),
+    batchId: bigint("batch_id", { mode: "number" }).references(() => materialBatches.id, { onDelete: "cascade" }),
+    bindingRole: text("binding_role").notNull().default("quality"),
+    useInActs: boolean("use_in_acts").notNull().default(true),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    documentIdIdx: index("document_bindings_document_id_idx").on(t.documentId),
+    projectMaterialIdIdx: index("document_bindings_project_material_id_idx").on(t.projectMaterialId),
+    objectIdIdx: index("document_bindings_object_id_idx").on(t.objectId),
+    roleCheck: check(
+      "document_bindings_role_check",
+      sql`binding_role IN ('quality', 'passport', 'protocol', 'scheme', 'other')`,
+    ),
+    hasTargetCheck: check(
+      "document_bindings_has_target_check",
+      sql`object_id IS NOT NULL OR project_material_id IS NOT NULL OR batch_id IS NOT NULL`,
+    ),
+  })
+);
+
+export const actMaterialUsages = pgTable(
+  "act_material_usages",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    actId: integer("act_id")
+      .notNull()
+      .references(() => acts.id, { onDelete: "cascade" }),
+    projectMaterialId: bigint("project_material_id", { mode: "number" })
+      .notNull()
+      .references(() => projectMaterials.id, { onDelete: "restrict" }),
+    workId: integer("work_id").references(() => works.id, { onDelete: "set null" }),
+    batchId: bigint("batch_id", { mode: "number" }).references(() => materialBatches.id, { onDelete: "set null" }),
+    qualityDocumentId: bigint("quality_document_id", { mode: "number" }).references(() => documents.id, {
+      onDelete: "restrict",
+    }),
+    note: text("note"),
+    orderIndex: integer("order_index").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    actIdIdx: index("act_material_usages_act_id_idx").on(t.actId),
+    orderIdx: index("act_material_usages_order_idx").on(t.actId, t.orderIndex),
+  })
+);
+
+export const actDocumentAttachments = pgTable(
+  "act_document_attachments",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    actId: integer("act_id")
+      .notNull()
+      .references(() => acts.id, { onDelete: "cascade" }),
+    documentId: bigint("document_id", { mode: "number" })
+      .notNull()
+      .references(() => documents.id, { onDelete: "restrict" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    actIdIdx: index("act_document_attachments_act_id_idx").on(t.actId),
+    orderIdx: index("act_document_attachments_order_idx").on(t.actId, t.orderIndex),
+    uniqActDoc: uniqueIndex("act_document_attachments_act_doc_uniq").on(t.actId, t.documentId),
+  })
+);
+
 // Act Templates catalog
 export const actTemplates = pgTable("act_templates", {
   id: serial("id").primaryKey(),
@@ -329,6 +530,27 @@ export type Act = typeof acts.$inferSelect;
 export type InsertAct = z.infer<typeof insertActSchema>;
 
 export type Attachment = typeof attachments.$inferSelect;
+
+export type MaterialCatalog = typeof materialsCatalog.$inferSelect;
+export type InsertMaterialCatalog = typeof materialsCatalog.$inferInsert;
+
+export type ProjectMaterial = typeof projectMaterials.$inferSelect;
+export type InsertProjectMaterial = typeof projectMaterials.$inferInsert;
+
+export type MaterialBatch = typeof materialBatches.$inferSelect;
+export type InsertMaterialBatch = typeof materialBatches.$inferInsert;
+
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = typeof documents.$inferInsert;
+
+export type DocumentBinding = typeof documentBindings.$inferSelect;
+export type InsertDocumentBinding = typeof documentBindings.$inferInsert;
+
+export type ActMaterialUsage = typeof actMaterialUsages.$inferSelect;
+export type InsertActMaterialUsage = typeof actMaterialUsages.$inferInsert;
+
+export type ActDocumentAttachment = typeof actDocumentAttachments.$inferSelect;
+export type InsertActDocumentAttachment = typeof actDocumentAttachments.$inferInsert;
 
 export type ActTemplate = typeof actTemplates.$inferSelect;
 export type InsertActTemplate = z.infer<typeof insertActTemplateSchema>;

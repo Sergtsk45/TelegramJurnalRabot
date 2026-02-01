@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import {
   objects,
+  materialsCatalog,
+  projectMaterials,
+  materialBatches,
+  documents,
+  documentBindings,
+  actMaterialUsages,
+  actDocumentAttachments,
   insertWorkSchema,
   insertEstimateSchema,
   insertEstimateSectionSchema,
@@ -18,7 +25,7 @@ import {
   positionResources,
   messages,
   acts,
-  attachments
+  attachments,
 } from './schema';
 
 export const partyDtoSchema = z.object({
@@ -105,6 +112,306 @@ export const api = {
       input: sourceDataDtoSchema,
       responses: {
         200: sourceDataDtoSchema,
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+  },
+  materialsCatalog: {
+    search: {
+      method: "GET" as const,
+      path: "/api/materials-catalog",
+      responses: {
+        200: z.array(z.custom<typeof materialsCatalog.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/materials-catalog",
+      input: z.object({
+        name: z.string().trim().min(1),
+        category: z.enum(["material", "equipment", "product"]).nullable().optional(),
+        standardRef: z.string().nullable().optional(),
+        baseUnit: z.string().nullable().optional(),
+        params: z.record(z.any()).optional(),
+      }),
+      responses: {
+        201: z.custom<typeof materialsCatalog.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+      },
+    },
+  },
+  projectMaterials: {
+    list: {
+      method: "GET" as const,
+      path: "/api/objects/:objectId/materials",
+      responses: {
+        200: z.array(
+          z
+            .object({
+              id: z.number(),
+              objectId: z.number(),
+              catalogMaterialId: z.number().nullable().optional(),
+              nameOverride: z.string().nullable().optional(),
+              baseUnitOverride: z.string().nullable().optional(),
+              paramsOverride: z.any().optional(),
+              createdAt: z.any().optional(),
+              updatedAt: z.any().optional(),
+              deletedAt: z.any().optional(),
+              // aggregates
+              batchesCount: z.number().int().nonnegative(),
+              docsCount: z.number().int().nonnegative(),
+              qualityDocsCount: z.number().int().nonnegative(),
+              hasUseInActsQualityDoc: z.boolean(),
+            })
+            .passthrough()
+        ),
+        400: z.object({ message: z.string() }),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/objects/:objectId/materials",
+      input: z
+        .object({
+          catalogMaterialId: z.number().int().positive().optional(),
+          nameOverride: z.string().trim().min(1).optional(),
+          baseUnitOverride: z.string().trim().min(1).optional(),
+          paramsOverride: z.record(z.any()).optional(),
+        })
+        .refine((v) => v.catalogMaterialId != null || v.nameOverride != null, {
+          message: "Either catalogMaterialId or nameOverride is required",
+        }),
+      responses: {
+        201: z.custom<typeof projectMaterials.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+      },
+    },
+    get: {
+      method: "GET" as const,
+      path: "/api/project-materials/:id",
+      responses: {
+        200: z
+          .object({
+            material: z.custom<typeof projectMaterials.$inferSelect>(),
+            catalog: z.custom<typeof materialsCatalog.$inferSelect>().nullable().optional(),
+            batches: z.array(z.custom<typeof materialBatches.$inferSelect>()),
+            bindings: z.array(z.custom<typeof documentBindings.$inferSelect>()),
+            documents: z.array(z.custom<typeof documents.$inferSelect>()).optional(),
+          })
+          .passthrough(),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    patch: {
+      method: "PATCH" as const,
+      path: "/api/project-materials/:id",
+      input: z
+        .object({
+          nameOverride: z.string().nullable().optional(),
+          baseUnitOverride: z.string().nullable().optional(),
+          paramsOverride: z.record(z.any()).nullable().optional(),
+          catalogMaterialId: z.number().int().positive().nullable().optional(),
+        })
+        .refine((v) => Object.keys(v).length > 0, { message: "Empty patch" }),
+      responses: {
+        200: z.custom<typeof projectMaterials.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    saveToCatalog: {
+      method: "POST" as const,
+      path: "/api/project-materials/:id/save-to-catalog",
+      input: z.object({}).optional(),
+      responses: {
+        200: z.custom<typeof materialsCatalog.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+  },
+  materialBatches: {
+    create: {
+      method: "POST" as const,
+      path: "/api/project-materials/:id/batches",
+      input: z.object({
+        supplierName: z.string().nullable().optional(),
+        manufacturer: z.string().nullable().optional(),
+        plant: z.string().nullable().optional(),
+        batchNumber: z.string().nullable().optional(),
+        deliveryDate: z.string().nullable().optional(), // YYYY-MM-DD
+        quantity: z.string().nullable().optional(), // numeric
+        unit: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
+      }),
+      responses: {
+        201: z.custom<typeof materialBatches.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    patch: {
+      method: "PATCH" as const,
+      path: "/api/material-batches/:id",
+      input: z
+        .object({
+          supplierName: z.string().nullable().optional(),
+          manufacturer: z.string().nullable().optional(),
+          plant: z.string().nullable().optional(),
+          batchNumber: z.string().nullable().optional(),
+          deliveryDate: z.string().nullable().optional(), // YYYY-MM-DD
+          quantity: z.string().nullable().optional(), // numeric
+          unit: z.string().nullable().optional(),
+          notes: z.string().nullable().optional(),
+        })
+        .refine((v) => Object.keys(v).length > 0, { message: "Empty patch" }),
+      responses: {
+        200: z.custom<typeof materialBatches.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/material-batches/:id",
+      responses: {
+        204: z.any(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+  },
+  documents: {
+    list: {
+      method: "GET" as const,
+      path: "/api/documents",
+      responses: {
+        200: z.array(z.custom<typeof documents.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/documents",
+      input: z.object({
+        docType: z.enum(["certificate", "declaration", "passport", "protocol", "scheme", "other"]),
+        scope: z.enum(["global", "project"]).optional(),
+        title: z.string().nullable().optional(),
+        docNumber: z.string().nullable().optional(),
+        docDate: z.string().nullable().optional(), // YYYY-MM-DD
+        issuer: z.string().nullable().optional(),
+        validFrom: z.string().nullable().optional(),
+        validTo: z.string().nullable().optional(),
+        meta: z.record(z.any()).optional(),
+        fileUrl: z.string().nullable().optional(),
+      }),
+      responses: {
+        201: z.custom<typeof documents.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+      },
+    },
+  },
+  documentBindings: {
+    create: {
+      method: "POST" as const,
+      path: "/api/document-bindings",
+      input: z
+        .object({
+          documentId: z.number().int().positive(),
+          objectId: z.number().int().positive().nullable().optional(),
+          projectMaterialId: z.number().int().positive().nullable().optional(),
+          batchId: z.number().int().positive().nullable().optional(),
+          bindingRole: z.enum(["quality", "passport", "protocol", "scheme", "other"]).optional(),
+          useInActs: z.boolean().optional(),
+          isPrimary: z.boolean().optional(),
+        })
+        .refine((v) => v.objectId != null || v.projectMaterialId != null || v.batchId != null, {
+          message: "Binding target is required (objectId/projectMaterialId/batchId)",
+        }),
+      responses: {
+        201: z.custom<typeof documentBindings.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+      },
+    },
+    patch: {
+      method: "PATCH" as const,
+      path: "/api/document-bindings/:id",
+      input: z
+        .object({
+          useInActs: z.boolean().optional(),
+          isPrimary: z.boolean().optional(),
+          bindingRole: z.enum(["quality", "passport", "protocol", "scheme", "other"]).optional(),
+        })
+        .refine((v) => Object.keys(v).length > 0, { message: "Empty patch" }),
+      responses: {
+        200: z.custom<typeof documentBindings.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/document-bindings/:id",
+      responses: {
+        204: z.any(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+  },
+  actMaterialUsages: {
+    list: {
+      method: "GET" as const,
+      path: "/api/acts/:id/material-usages",
+      responses: {
+        200: z.array(z.custom<typeof actMaterialUsages.$inferSelect>()).or(z.array(z.any())),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    replace: {
+      method: "PUT" as const,
+      path: "/api/acts/:id/material-usages",
+      input: z.object({
+        items: z.array(
+          z.object({
+            projectMaterialId: z.number().int().positive(),
+            workId: z.number().int().positive().nullable().optional(),
+            batchId: z.number().int().positive().nullable().optional(),
+            qualityDocumentId: z.number().int().positive().nullable().optional(),
+            note: z.string().nullable().optional(),
+            orderIndex: z.number().int().min(0).optional(),
+          })
+        ),
+      }),
+      responses: {
+        200: z.array(z.any()),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+  },
+  actDocumentAttachments: {
+    list: {
+      method: "GET" as const,
+      path: "/api/acts/:id/document-attachments",
+      responses: {
+        200: z.array(z.custom<typeof actDocumentAttachments.$inferSelect>()).or(z.array(z.any())),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    replace: {
+      method: "PUT" as const,
+      path: "/api/acts/:id/document-attachments",
+      input: z.object({
+        items: z.array(
+          z.object({
+            documentId: z.number().int().positive(),
+            orderIndex: z.number().int().min(0).optional(),
+          })
+        ),
+      }),
+      responses: {
+        200: z.array(z.any()),
         400: z.object({ message: z.string() }),
         404: z.object({ message: z.string() }),
       },
@@ -406,6 +713,20 @@ export type {
   InsertMessage,
   Act,
   InsertAct,
+  MaterialCatalog,
+  InsertMaterialCatalog,
+  ProjectMaterial,
+  InsertProjectMaterial,
+  MaterialBatch,
+  InsertMaterialBatch,
+  Document,
+  InsertDocument,
+  DocumentBinding,
+  InsertDocumentBinding,
+  ActMaterialUsage,
+  InsertActMaterialUsage,
+  ActDocumentAttachment,
+  InsertActDocumentAttachment,
   Schedule,
   InsertSchedule,
   ScheduleTask,

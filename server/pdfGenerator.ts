@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
 import type { PartyDto, PersonDto, SourceDataDto } from "@shared/routes";
+import { storage } from "./storage";
 
 const require = createRequire(import.meta.url);
 const PdfPrinter = require("pdfmake/js/Printer.js").default;
@@ -452,7 +453,7 @@ function buildAosrPlaceholderValues(data: ActData): Record<string, string> {
 
   const attachmentsText =
     data.attachmentsText ??
-    buildAttachmentsText({
+    buildAttachmentsTextFallback({
       attachments: data.attachments ?? [],
       materials: data.materials ?? [],
     });
@@ -571,7 +572,65 @@ function buildNumberedListText(items: string[]): string {
   return clean.map((x, idx) => `${idx + 1}. ${x}`).join("\n");
 }
 
-function buildAttachmentsText(input: {
+function translateDocTypeRu(docType: string | null | undefined): string {
+  switch (String(docType ?? "")) {
+    case "certificate":
+      return "Сертификат";
+    case "declaration":
+      return "Декларация";
+    case "passport":
+      return "Паспорт";
+    case "protocol":
+      return "Протокол";
+    case "scheme":
+      return "Схема";
+    default:
+      return "Документ";
+  }
+}
+
+export async function buildP3MaterialsText(actId: number): Promise<string> {
+  const usages = await storage.getActMaterialUsages(actId);
+  if (!usages || usages.length === 0) return "";
+
+  const lines = usages.map((u) => {
+    const name =
+      String(u.catalogMaterial?.name ?? "").trim() ||
+      String(u.projectMaterial?.nameOverride ?? "").trim() ||
+      `Материал #${String(u.projectMaterialId)}`;
+
+    const standardRef = String((u.catalogMaterial as any)?.standardRef ?? "").trim();
+    const namePart = standardRef ? `${name} (${standardRef})` : name;
+
+    const qd = u.qualityDocument;
+    const docPart = qd
+      ? `${translateDocTypeRu((qd as any).docType)}${(qd as any).docNumber ? ` №${String((qd as any).docNumber)}` : ""}${
+          (qd as any).docDate ? ` от ${formatDate(String((qd as any).docDate))}` : ""
+        }`
+      : "документ качества: не указан";
+
+    return `Материал: ${namePart} — Документ: ${docPart}`;
+  });
+
+  return buildNumberedListText(lines);
+}
+
+export async function buildAttachmentsText(actId: number): Promise<string> {
+  const list = await storage.getActDocAttachments(actId);
+  if (!list || list.length === 0) return "";
+
+  const lines = list.map((a, idx) => {
+    const d: any = (a as any).document ?? null;
+    const type = translateDocTypeRu(d?.docType);
+    const number = d?.docNumber ? ` №${String(d.docNumber)}` : "";
+    const date = d?.docDate ? ` от ${formatDate(String(d.docDate))}` : "";
+    return `Приложение ${idx + 1} — ${type}${number}${date}`.trim();
+  });
+
+  return lines.join("\n");
+}
+
+function buildAttachmentsTextFallback(input: {
   attachments: string[];
   materials: NonNullable<ActData["materials"]>;
 }): string {

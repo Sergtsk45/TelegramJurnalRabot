@@ -4,7 +4,14 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
-import { buildActDataFromSourceData, generateAosrPdf, loadTemplateCatalog, type ActData } from "./pdfGenerator";
+import {
+  buildActDataFromSourceData,
+  buildAttachmentsText,
+  buildP3MaterialsText,
+  generateAosrPdf,
+  loadTemplateCatalog,
+  type ActData,
+} from "./pdfGenerator";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -121,6 +128,327 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Object not found" });
       }
       console.error("Put source-data failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Materials & Documents (Source Data module)
+  app.get(api.materialsCatalog.search.path, async (req, res) => {
+    try {
+      const query = typeof req.query.query === "string" ? req.query.query : "";
+      const list = await storage.searchMaterialsCatalog(query);
+      return res.status(200).json(list);
+    } catch (err) {
+      console.error("Materials catalog search failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.materialsCatalog.create.path, async (req, res) => {
+    try {
+      const input = api.materialsCatalog.create.input.parse(req.body);
+      const created = await storage.createMaterialCatalog(input as any);
+      return res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Materials catalog create failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.get(api.projectMaterials.list.path, async (req, res) => {
+    const objectId = Number(req.params.objectId);
+    if (!Number.isFinite(objectId) || objectId <= 0) {
+      return res.status(400).json({ message: "Invalid objectId" });
+    }
+    try {
+      const list = await storage.listProjectMaterials(objectId);
+      return res.status(200).json(list);
+    } catch (err) {
+      console.error("Project materials list failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.projectMaterials.create.path, async (req, res) => {
+    const objectId = Number(req.params.objectId);
+    if (!Number.isFinite(objectId) || objectId <= 0) {
+      return res.status(400).json({ message: "Invalid objectId" });
+    }
+    try {
+      const input = api.projectMaterials.create.input.parse(req.body);
+      const created = await storage.createProjectMaterial(objectId, {
+        catalogMaterialId: (input as any).catalogMaterialId ?? null,
+        nameOverride: (input as any).nameOverride ?? null,
+        baseUnitOverride: (input as any).baseUnitOverride ?? null,
+        paramsOverride: (input as any).paramsOverride ?? {},
+      } as any);
+      return res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Project materials create failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.get(api.projectMaterials.get.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    try {
+      const data = await storage.getProjectMaterial(id);
+      if (!data) return res.status(404).json({ message: "Not found" });
+      return res.status(200).json(data);
+    } catch (err) {
+      console.error("Project material get failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.patch(api.projectMaterials.patch.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    try {
+      const patch = api.projectMaterials.patch.input.parse(req.body);
+      const updated = await storage.updateProjectMaterial(id, patch as any);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      return res.status(200).json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Project material patch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.projectMaterials.saveToCatalog.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    try {
+      api.projectMaterials.saveToCatalog.input?.parse(req.body ?? {});
+      const created = await storage.saveProjectMaterialToCatalog(id);
+      return res.status(200).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      if (err instanceof Error && err.message === "PROJECT_MATERIAL_NOT_FOUND") {
+        return res.status(404).json({ message: "Not found" });
+      }
+      if (err instanceof Error && err.message === "NAME_OVERRIDE_REQUIRED") {
+        return res.status(400).json({ message: "nameOverride is required for local materials" });
+      }
+      console.error("Save project material to catalog failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.materialBatches.create.path, async (req, res) => {
+    const projectMaterialId = Number(req.params.id);
+    if (!Number.isFinite(projectMaterialId) || projectMaterialId <= 0) {
+      return res.status(400).json({ message: "Invalid project material id" });
+    }
+    try {
+      const input = api.materialBatches.create.input.parse(req.body);
+      const created = await storage.createBatch(projectMaterialId, input as any);
+      return res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      if (err instanceof Error && err.message === "PROJECT_MATERIAL_NOT_FOUND") {
+        return res.status(404).json({ message: "Not found" });
+      }
+      console.error("Create batch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.patch(api.materialBatches.patch.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    try {
+      const patch = api.materialBatches.patch.input.parse(req.body);
+      const updated = await storage.updateBatch(id, patch as any);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      return res.status(200).json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Batch patch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.delete(api.materialBatches.delete.path, async (req, res) => {
+    // Dev-only destructive endpoint
+    if (process.env.NODE_ENV === "production") {
+      return res.status(404).json({ message: "Not found" });
+    }
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    try {
+      const ok = await storage.deleteBatch(id);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      return res.status(204).send();
+    } catch (err) {
+      console.error("Delete batch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.get(api.documents.list.path, async (req, res) => {
+    try {
+      const query = typeof req.query.query === "string" ? req.query.query : undefined;
+      const docType = typeof req.query.docType === "string" ? req.query.docType : undefined;
+      const scope = typeof req.query.scope === "string" ? req.query.scope : undefined;
+      const list = await storage.searchDocuments({ query, docType, scope });
+      return res.status(200).json(list);
+    } catch (err) {
+      console.error("Documents list failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.documents.create.path, async (req, res) => {
+    try {
+      const input = api.documents.create.input.parse(req.body);
+      const created = await storage.createDocument(input as any);
+      return res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Documents create failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.documentBindings.create.path, async (req, res) => {
+    try {
+      const input = api.documentBindings.create.input.parse(req.body);
+      const created = await storage.createBinding(input as any);
+      return res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Document binding create failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.patch(api.documentBindings.patch.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    try {
+      const patch = api.documentBindings.patch.input.parse(req.body);
+      const updated = await storage.updateBinding(id, patch as any);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      return res.status(200).json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Document binding patch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.delete(api.documentBindings.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    try {
+      const ok = await storage.deleteBinding(id);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      return res.status(204).send();
+    } catch (err) {
+      console.error("Delete document binding failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.get(api.actMaterialUsages.list.path, async (req, res) => {
+    const actId = Number(req.params.id);
+    if (!Number.isFinite(actId) || actId <= 0) {
+      return res.status(400).json({ message: "Invalid act id" });
+    }
+    try {
+      const items = await storage.getActMaterialUsages(actId);
+      return res.status(200).json(items);
+    } catch (err) {
+      console.error("Act material usages list failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.put(api.actMaterialUsages.replace.path, async (req, res) => {
+    const actId = Number(req.params.id);
+    if (!Number.isFinite(actId) || actId <= 0) {
+      return res.status(400).json({ message: "Invalid act id" });
+    }
+    try {
+      const input = api.actMaterialUsages.replace.input.parse(req.body);
+      await storage.replaceActMaterialUsages(actId, (input as any).items ?? []);
+      const items = await storage.getActMaterialUsages(actId);
+      return res.status(200).json(items);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Act material usages replace failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.get(api.actDocumentAttachments.list.path, async (req, res) => {
+    const actId = Number(req.params.id);
+    if (!Number.isFinite(actId) || actId <= 0) {
+      return res.status(400).json({ message: "Invalid act id" });
+    }
+    try {
+      const items = await storage.getActDocAttachments(actId);
+      return res.status(200).json(items);
+    } catch (err) {
+      console.error("Act document attachments list failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.put(api.actDocumentAttachments.replace.path, async (req, res) => {
+    const actId = Number(req.params.id);
+    if (!Number.isFinite(actId) || actId <= 0) {
+      return res.status(400).json({ message: "Invalid act id" });
+    }
+    try {
+      const input = api.actDocumentAttachments.replace.input.parse(req.body);
+      await storage.replaceActDocAttachments(actId, (input as any).items ?? []);
+      const items = await storage.getActDocAttachments(actId);
+      return res.status(200).json(items);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Act document attachments replace failed:", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   });
@@ -618,6 +946,8 @@ export async function registerRoutes(
       const objectId = (act as any).objectId ?? (await storage.getOrCreateDefaultObject()).id;
       const sourceData = await storage.getObjectSourceData(Number(objectId));
       const objectActData = buildActDataFromSourceData(sourceData);
+      const dbP3MaterialsText = await buildP3MaterialsText(actId);
+      const dbAttachmentsText = await buildAttachmentsText(actId);
 
       // Allow exporting without explicit templates (for acts generated from schedule).
       // Strategy:
@@ -684,14 +1014,14 @@ export async function registerRoutes(
           repWorkPerformerLine: formData?.repWorkPerformerLine ?? objectActData.repWorkPerformerLine,
           repWorkPerformerOrder: formData?.repWorkPerformerOrder ?? objectActData.repWorkPerformerOrder,
           p2ProjectDocs: formData?.p2ProjectDocs ?? objectActData.p2ProjectDocs,
-          p3MaterialsText: formData?.p3MaterialsText ?? objectActData.p3MaterialsText,
+          p3MaterialsText: formData?.p3MaterialsText ?? (dbP3MaterialsText || objectActData.p3MaterialsText),
           p4AsBuiltDocs: formData?.p4AsBuiltDocs ?? objectActData.p4AsBuiltDocs,
           p6NormativeRefs: formData?.p6NormativeRefs ?? objectActData.p6NormativeRefs,
           p7NextWorks: formData?.p7NextWorks ?? objectActData.p7NextWorks,
           additionalInfo: formData?.additionalInfo ?? objectActData.additionalInfo,
           copiesCount: formData?.copiesCount ?? objectActData.copiesCount,
           attachments: Array.isArray(formData?.attachments) ? formData.attachments : undefined,
-          attachmentsText: formData?.attachmentsText ?? objectActData.attachmentsText,
+          attachmentsText: formData?.attachmentsText ?? (dbAttachmentsText || objectActData.attachmentsText),
           sigCustomerControl: formData?.sigCustomerControl ?? objectActData.sigCustomerControl,
           sigBuilder: formData?.sigBuilder ?? objectActData.sigBuilder,
           sigBuilderControl: formData?.sigBuilderControl ?? objectActData.sigBuilderControl,
@@ -756,7 +1086,7 @@ export async function registerRoutes(
           repWorkPerformerOrder: formData?.repWorkPerformerOrder ?? objectActData.repWorkPerformerOrder,
 
           p2ProjectDocs: formData?.p2ProjectDocs ?? objectActData.p2ProjectDocs,
-          p3MaterialsText: formData?.p3MaterialsText ?? objectActData.p3MaterialsText,
+          p3MaterialsText: formData?.p3MaterialsText ?? (dbP3MaterialsText || objectActData.p3MaterialsText),
           p4AsBuiltDocs: formData?.p4AsBuiltDocs ?? objectActData.p4AsBuiltDocs,
           p6NormativeRefs: formData?.p6NormativeRefs ?? objectActData.p6NormativeRefs,
           p7NextWorks: formData?.p7NextWorks ?? objectActData.p7NextWorks,
@@ -764,7 +1094,7 @@ export async function registerRoutes(
           copiesCount: formData?.copiesCount ?? objectActData.copiesCount,
 
           attachments: Array.isArray(formData?.attachments) ? formData.attachments : undefined,
-          attachmentsText: formData?.attachmentsText ?? objectActData.attachmentsText,
+          attachmentsText: formData?.attachmentsText ?? (dbAttachmentsText || objectActData.attachmentsText),
 
           sigCustomerControl: formData?.sigCustomerControl ?? objectActData.sigCustomerControl,
           sigBuilder: formData?.sigBuilder ?? objectActData.sigBuilder,

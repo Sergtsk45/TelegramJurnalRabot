@@ -11,6 +11,13 @@ import {
   messages,
   acts,
   attachments,
+  materialsCatalog,
+  projectMaterials,
+  materialBatches,
+  documents,
+  documentBindings,
+  actMaterialUsages,
+  actDocumentAttachments,
   actTemplates,
   actTemplateSelections,
   schedules,
@@ -31,6 +38,20 @@ import {
   type Message,
   type Act,
   type Attachment,
+  type MaterialCatalog,
+  type InsertMaterialCatalog,
+  type ProjectMaterial,
+  type InsertProjectMaterial,
+  type MaterialBatch,
+  type InsertMaterialBatch,
+  type Document,
+  type InsertDocument,
+  type DocumentBinding,
+  type InsertDocumentBinding,
+  type ActMaterialUsage,
+  type InsertActMaterialUsage,
+  type ActDocumentAttachment,
+  type InsertActDocumentAttachment,
   type Object as DbObject,
   type InsertObject,
   type ObjectParty,
@@ -45,7 +66,7 @@ import {
   type ScheduleTask
 } from "@shared/schema";
 import type { PartyDto, PersonDto, SourceDataDto } from "@shared/routes";
-import { eq, desc, inArray, asc } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 
 type ObjectPartyRole = "customer" | "builder" | "designer";
 type ObjectPersonRole =
@@ -65,6 +86,81 @@ export interface IStorage {
   updateObject(id: number, patch: Partial<Pick<InsertObject, "title" | "address" | "city">>): Promise<DbObject>;
   getObjectSourceData(objectId: number): Promise<SourceDataDto>;
   saveObjectSourceData(objectId: number, data: SourceDataDto): Promise<SourceDataDto>;
+
+  // Materials Catalog
+  searchMaterialsCatalog(query?: string): Promise<MaterialCatalog[]>;
+  createMaterialCatalog(material: InsertMaterialCatalog): Promise<MaterialCatalog>;
+
+  // Project Materials
+  listProjectMaterials(objectId: number): Promise<
+    Array<
+      ProjectMaterial & {
+        batchesCount: number;
+        docsCount: number;
+        qualityDocsCount: number;
+        hasUseInActsQualityDoc: boolean;
+      }
+    >
+  >;
+  getProjectMaterial(
+    id: number
+  ): Promise<
+    | {
+        material: ProjectMaterial;
+        catalog: MaterialCatalog | null;
+        batches: MaterialBatch[];
+        bindings: DocumentBinding[];
+        documents: Document[];
+      }
+    | undefined
+  >;
+  createProjectMaterial(
+    objectId: number,
+    data: Omit<InsertProjectMaterial, "objectId">
+  ): Promise<ProjectMaterial>;
+  updateProjectMaterial(
+    id: number,
+    patch: Partial<Pick<ProjectMaterial, "nameOverride" | "baseUnitOverride" | "paramsOverride" | "catalogMaterialId" | "deletedAt">>
+  ): Promise<ProjectMaterial | undefined>;
+  saveProjectMaterialToCatalog(id: number): Promise<MaterialCatalog>;
+
+  // Material Batches
+  createBatch(projectMaterialId: number, data: Omit<InsertMaterialBatch, "objectId" | "projectMaterialId">): Promise<MaterialBatch>;
+  updateBatch(
+    id: number,
+    patch: Partial<
+      Pick<MaterialBatch, "supplierName" | "manufacturer" | "plant" | "batchNumber" | "deliveryDate" | "quantity" | "unit" | "notes">
+    >
+  ): Promise<MaterialBatch | undefined>;
+  deleteBatch(id: number): Promise<boolean>;
+
+  // Documents
+  searchDocuments(params: { query?: string; docType?: string; scope?: string }): Promise<Document[]>;
+  createDocument(data: InsertDocument): Promise<Document>;
+
+  // Document Bindings
+  createBinding(data: InsertDocumentBinding): Promise<DocumentBinding>;
+  updateBinding(
+    id: number,
+    patch: Partial<Pick<DocumentBinding, "useInActs" | "isPrimary" | "bindingRole">>
+  ): Promise<DocumentBinding | undefined>;
+  deleteBinding(id: number): Promise<boolean>;
+
+  // Act Material Usages
+  getActMaterialUsages(actId: number): Promise<
+    Array<
+      ActMaterialUsage & {
+        projectMaterial?: ProjectMaterial;
+        catalogMaterial?: MaterialCatalog | null;
+        qualityDocument?: Document | null;
+      }
+    >
+  >;
+  replaceActMaterialUsages(actId: number, items: Array<Omit<InsertActMaterialUsage, "actId">>): Promise<void>;
+
+  // Act Document Attachments
+  getActDocAttachments(actId: number): Promise<Array<ActDocumentAttachment & { document?: Document | null }>>;
+  replaceActDocAttachments(actId: number, items: Array<Omit<InsertActDocumentAttachment, "actId">>): Promise<void>;
 
   // Works
   getWorks(): Promise<Work[]>;
@@ -396,6 +492,398 @@ export class DatabaseStorage implements IStorage {
       await upsertPerson("rep_work_performer", data.persons.rep_work_performer);
 
       return await this.getObjectSourceData(objectId);
+    });
+  }
+
+  // === Materials & Documents (Source Data module) ===
+
+  async searchMaterialsCatalog(query?: string): Promise<MaterialCatalog[]> {
+    const q = String(query ?? "").trim();
+    const where =
+      q.length > 0 ? and(isNull(materialsCatalog.deletedAt), ilike(materialsCatalog.name, `%${q}%`)) : isNull(materialsCatalog.deletedAt);
+
+    return await db.select().from(materialsCatalog).where(where).orderBy(asc(materialsCatalog.name));
+  }
+
+  async createMaterialCatalog(material: InsertMaterialCatalog): Promise<MaterialCatalog> {
+    const [created] = await db.insert(materialsCatalog).values(material).returning();
+    return created;
+  }
+
+  async listProjectMaterials(
+    objectId: number
+  ): Promise<Array<ProjectMaterial & { batchesCount: number; docsCount: number; qualityDocsCount: number; hasUseInActsQualityDoc: boolean }>> {
+    const rows = await db
+      .select({
+        id: projectMaterials.id,
+        objectId: projectMaterials.objectId,
+        catalogMaterialId: projectMaterials.catalogMaterialId,
+        nameOverride: projectMaterials.nameOverride,
+        baseUnitOverride: projectMaterials.baseUnitOverride,
+        paramsOverride: projectMaterials.paramsOverride,
+        createdAt: projectMaterials.createdAt,
+        updatedAt: projectMaterials.updatedAt,
+        deletedAt: projectMaterials.deletedAt,
+        // IMPORTANT: COUNT() is bigint in Postgres and is returned as string by the driver.
+        // Cast to int so API returns numbers (matches shared/routes.ts zod schema).
+        batchesCount: sql<number>`COALESCE(COUNT(DISTINCT ${materialBatches.id})::int, 0)`,
+        docsCount: sql<number>`COALESCE(COUNT(DISTINCT ${documentBindings.id})::int, 0)`,
+        qualityDocsCount: sql<number>`COALESCE(COUNT(DISTINCT CASE WHEN ${documentBindings.bindingRole}='quality' THEN ${documentBindings.id} END)::int, 0)`,
+        hasUseInActsQualityDoc: sql<boolean>`COALESCE(BOOL_OR(${documentBindings.bindingRole}='quality' AND ${documentBindings.useInActs}=TRUE), FALSE)`,
+      })
+      .from(projectMaterials)
+      .leftJoin(materialBatches, eq(materialBatches.projectMaterialId, projectMaterials.id))
+      .leftJoin(documentBindings, eq(documentBindings.projectMaterialId, projectMaterials.id))
+      .where(and(eq(projectMaterials.objectId, objectId), isNull(projectMaterials.deletedAt)))
+      .groupBy(projectMaterials.id)
+      .orderBy(desc(projectMaterials.updatedAt));
+
+    // Row shape matches ProjectMaterial + aggregates
+    return rows as any;
+  }
+
+  async getProjectMaterial(
+    id: number
+  ): Promise<
+    | {
+        material: ProjectMaterial;
+        catalog: MaterialCatalog | null;
+        batches: MaterialBatch[];
+        bindings: DocumentBinding[];
+        documents: Document[];
+      }
+    | undefined
+  > {
+    const [material] = await db
+      .select()
+      .from(projectMaterials)
+      .where(and(eq(projectMaterials.id, id as any), isNull(projectMaterials.deletedAt)));
+    if (!material) return undefined;
+
+    const catalogId = (material as any).catalogMaterialId as number | null | undefined;
+    const catalog =
+      catalogId == null
+        ? null
+        : (await db.select().from(materialsCatalog).where(and(eq(materialsCatalog.id, catalogId as any), isNull(materialsCatalog.deletedAt))))[0] ??
+          null;
+
+    const batches = await db
+      .select()
+      .from(materialBatches)
+      .where(eq(materialBatches.projectMaterialId, material.id))
+      .orderBy(desc(materialBatches.deliveryDate));
+
+    const bindings = await db
+      .select()
+      .from(documentBindings)
+      .where(eq(documentBindings.projectMaterialId, material.id))
+      .orderBy(desc(documentBindings.createdAt));
+
+    const documentIds = Array.from(new Set(bindings.map((b) => b.documentId).filter((v): v is any => v != null)));
+    const docs =
+      documentIds.length === 0
+        ? []
+        : await db
+            .select()
+            .from(documents)
+            .where(and(inArray(documents.id, documentIds as any), isNull(documents.deletedAt)))
+            .orderBy(desc(documents.updatedAt));
+
+    return { material, catalog, batches, bindings, documents: docs };
+  }
+
+  async createProjectMaterial(objectId: number, data: Omit<InsertProjectMaterial, "objectId">): Promise<ProjectMaterial> {
+    const [created] = await db
+      .insert(projectMaterials)
+      .values({
+        ...(data as any),
+        objectId,
+      })
+      .returning();
+    return created;
+  }
+
+  async updateProjectMaterial(
+    id: number,
+    patch: Partial<Pick<ProjectMaterial, "nameOverride" | "baseUnitOverride" | "paramsOverride" | "catalogMaterialId" | "deletedAt">>
+  ): Promise<ProjectMaterial | undefined> {
+    if (Object.keys(patch).length === 0) return undefined;
+    const [updated] = await db
+      .update(projectMaterials)
+      .set({
+        ...(patch.nameOverride !== undefined ? { nameOverride: patch.nameOverride as any } : {}),
+        ...(patch.baseUnitOverride !== undefined ? { baseUnitOverride: patch.baseUnitOverride as any } : {}),
+        ...(patch.paramsOverride !== undefined ? { paramsOverride: (patch.paramsOverride as any) ?? {} } : {}),
+        ...(patch.catalogMaterialId !== undefined ? { catalogMaterialId: patch.catalogMaterialId as any } : {}),
+        ...(patch.deletedAt !== undefined ? { deletedAt: patch.deletedAt as any } : {}),
+      })
+      .where(eq(projectMaterials.id, id as any))
+      .returning();
+    return updated;
+  }
+
+  async saveProjectMaterialToCatalog(id: number): Promise<MaterialCatalog> {
+    return await db.transaction(async (tx) => {
+      const [material] = await tx.select().from(projectMaterials).where(eq(projectMaterials.id, id as any));
+      if (!material) throw new Error("PROJECT_MATERIAL_NOT_FOUND");
+
+      const existingCatalogId = (material as any).catalogMaterialId as number | null | undefined;
+      if (existingCatalogId != null) {
+        const [existing] = await tx
+          .select()
+          .from(materialsCatalog)
+          .where(and(eq(materialsCatalog.id, existingCatalogId as any), isNull(materialsCatalog.deletedAt)));
+        if (!existing) throw new Error("CATALOG_MATERIAL_NOT_FOUND");
+        return existing;
+      }
+
+      const name = String((material as any).nameOverride ?? "").trim();
+      if (!name) throw new Error("NAME_OVERRIDE_REQUIRED");
+
+      const [createdCatalog] = await tx
+        .insert(materialsCatalog)
+        .values({
+          name,
+          category: null,
+          standardRef: null,
+          baseUnit: (material as any).baseUnitOverride ?? null,
+          params: (material as any).paramsOverride ?? {},
+        } as any)
+        .returning();
+
+      await tx
+        .update(projectMaterials)
+        .set({ catalogMaterialId: createdCatalog.id as any })
+        .where(eq(projectMaterials.id, id as any));
+
+      return createdCatalog;
+    });
+  }
+
+  async createBatch(projectMaterialId: number, data: Omit<InsertMaterialBatch, "objectId" | "projectMaterialId">): Promise<MaterialBatch> {
+    const [material] = await db.select({ objectId: projectMaterials.objectId }).from(projectMaterials).where(eq(projectMaterials.id, projectMaterialId as any));
+    if (!material) throw new Error("PROJECT_MATERIAL_NOT_FOUND");
+
+    const [created] = await db
+      .insert(materialBatches)
+      .values({
+        ...(data as any),
+        objectId: material.objectId,
+        projectMaterialId,
+      })
+      .returning();
+    return created;
+  }
+
+  async updateBatch(
+    id: number,
+    patch: Partial<
+      Pick<MaterialBatch, "supplierName" | "manufacturer" | "plant" | "batchNumber" | "deliveryDate" | "quantity" | "unit" | "notes">
+    >
+  ): Promise<MaterialBatch | undefined> {
+    if (Object.keys(patch).length === 0) return undefined;
+    const [updated] = await db
+      .update(materialBatches)
+      .set({
+        ...(patch.supplierName !== undefined ? { supplierName: patch.supplierName as any } : {}),
+        ...(patch.manufacturer !== undefined ? { manufacturer: patch.manufacturer as any } : {}),
+        ...(patch.plant !== undefined ? { plant: patch.plant as any } : {}),
+        ...(patch.batchNumber !== undefined ? { batchNumber: patch.batchNumber as any } : {}),
+        ...(patch.deliveryDate !== undefined ? { deliveryDate: patch.deliveryDate as any } : {}),
+        ...(patch.quantity !== undefined ? { quantity: patch.quantity as any } : {}),
+        ...(patch.unit !== undefined ? { unit: patch.unit as any } : {}),
+        ...(patch.notes !== undefined ? { notes: patch.notes as any } : {}),
+      })
+      .where(eq(materialBatches.id, id as any))
+      .returning();
+    return updated;
+  }
+
+  async deleteBatch(id: number): Promise<boolean> {
+    const [existing] = await db.select({ id: materialBatches.id }).from(materialBatches).where(eq(materialBatches.id, id as any));
+    if (!existing) return false;
+    await db.delete(materialBatches).where(eq(materialBatches.id, id as any));
+    return true;
+  }
+
+  async searchDocuments(params: { query?: string; docType?: string; scope?: string }): Promise<Document[]> {
+    const q = String(params.query ?? "").trim();
+    const docType = params.docType ? String(params.docType) : null;
+    const scope = params.scope ? String(params.scope) : null;
+
+    const whereParts = [
+      isNull(documents.deletedAt),
+      docType ? eq(documents.docType, docType) : undefined,
+      scope ? eq(documents.scope, scope) : undefined,
+      q
+        ? or(
+            ilike(documents.docNumber, `%${q}%`),
+            ilike(documents.title, `%${q}%`),
+            ilike(documents.issuer, `%${q}%`)
+          )
+        : undefined,
+    ].filter(Boolean) as any[];
+
+    const where = whereParts.length === 1 ? whereParts[0] : and(...whereParts);
+    return await db.select().from(documents).where(where).orderBy(desc(documents.updatedAt));
+  }
+
+  async createDocument(data: InsertDocument): Promise<Document> {
+    const [created] = await db.insert(documents).values(data).returning();
+    return created;
+  }
+
+  async createBinding(data: InsertDocumentBinding): Promise<DocumentBinding> {
+    const [created] = await db.insert(documentBindings).values(data).returning();
+    return created;
+  }
+
+  async updateBinding(
+    id: number,
+    patch: Partial<Pick<DocumentBinding, "useInActs" | "isPrimary" | "bindingRole">>
+  ): Promise<DocumentBinding | undefined> {
+    if (Object.keys(patch).length === 0) return undefined;
+
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(documentBindings).where(eq(documentBindings.id, id as any));
+      if (!existing) return undefined;
+
+      const [updated] = await tx
+        .update(documentBindings)
+        .set({
+          ...(patch.useInActs !== undefined ? { useInActs: patch.useInActs } : {}),
+          ...(patch.isPrimary !== undefined ? { isPrimary: patch.isPrimary } : {}),
+          ...(patch.bindingRole !== undefined ? { bindingRole: patch.bindingRole as any } : {}),
+        })
+        .where(eq(documentBindings.id, id as any))
+        .returning();
+
+      // Enforce single primary within a material + role (UX constraint)
+      if (patch.isPrimary === true && updated.projectMaterialId != null) {
+        await tx
+          .update(documentBindings)
+          .set({ isPrimary: false })
+          .where(
+            and(
+              eq(documentBindings.projectMaterialId, updated.projectMaterialId as any),
+              eq(documentBindings.bindingRole, updated.bindingRole as any),
+              sql`${documentBindings.id} <> ${updated.id}`
+            )
+          );
+      }
+
+      return updated;
+    });
+  }
+
+  async deleteBinding(id: number): Promise<boolean> {
+    const [existing] = await db.select({ id: documentBindings.id }).from(documentBindings).where(eq(documentBindings.id, id as any));
+    if (!existing) return false;
+    await db.delete(documentBindings).where(eq(documentBindings.id, id as any));
+    return true;
+  }
+
+  async getActMaterialUsages(
+    actId: number
+  ): Promise<Array<ActMaterialUsage & { projectMaterial?: ProjectMaterial; catalogMaterial?: MaterialCatalog | null; qualityDocument?: Document | null }>> {
+    const usages = await db
+      .select()
+      .from(actMaterialUsages)
+      .where(eq(actMaterialUsages.actId, actId))
+      .orderBy(asc(actMaterialUsages.orderIndex));
+
+    const materialIds = Array.from(new Set(usages.map((u) => u.projectMaterialId)));
+    const qualityDocIds = Array.from(new Set(usages.map((u) => u.qualityDocumentId).filter((v): v is any => v != null)));
+
+    const materials =
+      materialIds.length === 0
+        ? []
+        : await db
+            .select({
+              material: projectMaterials,
+              catalog: materialsCatalog,
+            })
+            .from(projectMaterials)
+            .leftJoin(materialsCatalog, eq(materialsCatalog.id, projectMaterials.catalogMaterialId))
+            .where(inArray(projectMaterials.id, materialIds as any));
+
+    const docs =
+      qualityDocIds.length === 0
+        ? []
+        : await db.select().from(documents).where(and(inArray(documents.id, qualityDocIds as any), isNull(documents.deletedAt)));
+
+    const materialById = new Map<number, { material: ProjectMaterial; catalog: MaterialCatalog | null }>();
+    for (const row of materials) {
+      const mat = (row as any).material as ProjectMaterial;
+      const cat = (row as any).catalog as MaterialCatalog | null;
+      materialById.set(Number(mat.id), { material: mat, catalog: cat });
+    }
+
+    const docById = new Map<number, Document>();
+    for (const d of docs) docById.set(Number(d.id), d);
+
+    return usages.map((u) => {
+      const mat = materialById.get(Number(u.projectMaterialId));
+      const qd = u.qualityDocumentId == null ? null : (docById.get(Number(u.qualityDocumentId)) ?? null);
+      return {
+        ...(u as any),
+        projectMaterial: mat?.material,
+        catalogMaterial: mat?.catalog ?? null,
+        qualityDocument: qd,
+      };
+    });
+  }
+
+  async replaceActMaterialUsages(actId: number, items: Array<Omit<InsertActMaterialUsage, "actId">>): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(actMaterialUsages).where(eq(actMaterialUsages.actId, actId));
+      if (items.length === 0) return;
+
+      const values = items.map((it, idx) => ({
+        ...(it as any),
+        actId,
+        orderIndex: (it as any).orderIndex ?? idx,
+      }));
+      await tx.insert(actMaterialUsages).values(values as any);
+    });
+  }
+
+  async getActDocAttachments(actId: number): Promise<Array<ActDocumentAttachment & { document?: Document | null }>> {
+    const attachmentsRows = await db
+      .select()
+      .from(actDocumentAttachments)
+      .where(eq(actDocumentAttachments.actId, actId))
+      .orderBy(asc(actDocumentAttachments.orderIndex));
+
+    const docIds = Array.from(new Set(attachmentsRows.map((a) => a.documentId)));
+    const docs =
+      docIds.length === 0
+        ? []
+        : await db.select().from(documents).where(and(inArray(documents.id, docIds as any), isNull(documents.deletedAt)));
+    const docById = new Map<number, Document>();
+    for (const d of docs) docById.set(Number(d.id), d);
+
+    return attachmentsRows.map((a) => ({ ...(a as any), document: docById.get(Number(a.documentId)) ?? null }));
+  }
+
+  async replaceActDocAttachments(actId: number, items: Array<Omit<InsertActDocumentAttachment, "actId">>): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(actDocumentAttachments).where(eq(actDocumentAttachments.actId, actId));
+      if (items.length === 0) return;
+
+      // Dedupe by documentId (keep first occurrence, preserve order)
+      const seen = new Set<number>();
+      const deduped: Array<Omit<InsertActDocumentAttachment, "actId"> & { orderIndex: number }> = [];
+      for (let i = 0; i < items.length; i++) {
+        const docId = Number((items[i] as any).documentId);
+        if (!Number.isFinite(docId)) continue;
+        if (seen.has(docId)) continue;
+        seen.add(docId);
+        deduped.push({ ...(items[i] as any), orderIndex: (items[i] as any).orderIndex ?? i });
+      }
+
+      const values = deduped.map((it) => ({ ...(it as any), actId }));
+      await tx.insert(actDocumentAttachments).values(values as any);
     });
   }
 

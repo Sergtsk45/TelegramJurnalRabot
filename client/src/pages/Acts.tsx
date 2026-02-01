@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
 import { useActs, useGenerateAct } from "@/hooks/use-acts";
@@ -22,8 +22,11 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDefaultSchedule } from "@/hooks/use-schedules";
 import { api, buildUrl } from "@shared/routes";
+import { useCurrentObject } from "@/hooks/use-source-data";
+import { useProjectMaterials } from "@/hooks/use-materials";
 
 interface ActTemplate {
   id: number;
@@ -55,6 +58,9 @@ export default function Acts() {
   const { toast } = useToast();
   const { data: defaultSchedule } = useDefaultSchedule();
   const scheduleId = defaultSchedule?.id;
+  const currentObject = useCurrentObject();
+  const objectId = currentObject.data?.id;
+  const projectMaterialsQuery = useProjectMaterials(objectId);
   const [dateStart, setDateStart] = useState<Date>();
   const [dateEnd, setDateEnd] = useState<Date>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -103,6 +109,71 @@ export default function Acts() {
     sigDesigner: "",
     sigWorkPerformer: "",
   });
+
+  // Материалы для п.3 АОСР (на уровне БД: act_material_usages)
+  const [p3Materials, setP3Materials] = useState<
+    Array<{ projectMaterialId: number; title: string; qualityDocumentId: number | null; qualityLabel?: string }>
+  >([]);
+  const [isP3PickerOpen, setIsP3PickerOpen] = useState(false);
+  const [p3PickerSearch, setP3PickerSearch] = useState("");
+  const [docPickerForMaterialId, setDocPickerForMaterialId] = useState<number | null>(null);
+  const [docPickerLoading, setDocPickerLoading] = useState(false);
+  const [docPickerOptions, setDocPickerOptions] = useState<Array<{ id: number; label: string }>>([]);
+
+  const derivedAttachments = useMemo(() => {
+    const ids = new Set<number>();
+    const lines: string[] = [];
+    for (const m of p3Materials) {
+      if (m.qualityDocumentId == null) continue;
+      if (ids.has(m.qualityDocumentId)) continue;
+      ids.add(m.qualityDocumentId);
+      lines.push(m.qualityLabel ? m.qualityLabel : `Документ #${m.qualityDocumentId}`);
+    }
+    return lines;
+  }, [p3Materials]);
+
+  useEffect(() => {
+    const materialId = docPickerForMaterialId;
+    if (!materialId) return;
+
+    let cancelled = false;
+    const run = async () => {
+      setDocPickerLoading(true);
+      try {
+        const url = buildUrl(api.projectMaterials.get.path, { id: materialId });
+        const res = await fetch(url, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to load material details");
+        const data: any = await res.json();
+
+        const bindings: any[] = Array.isArray(data?.bindings) ? data.bindings : [];
+        const docs: any[] = Array.isArray(data?.documents) ? data.documents : [];
+
+        const qualityDocIds = new Set<number>(
+          bindings.filter((b) => b?.bindingRole === "quality").map((b) => Number(b?.documentId)).filter((x) => Number.isFinite(x) && x > 0),
+        );
+
+        const options = docs
+          .filter((d) => qualityDocIds.has(Number(d?.id)))
+          .map((d) => {
+            const type = String(d?.docType ?? "document");
+            const num = d?.docNumber ? ` №${String(d.docNumber)}` : "";
+            const dt = d?.docDate ? ` от ${String(d.docDate)}` : "";
+            return { id: Number(d.id), label: `${type}${num}${dt}`.trim() };
+          });
+
+        if (!cancelled) setDocPickerOptions(options);
+      } catch {
+        if (!cancelled) setDocPickerOptions([]);
+      } finally {
+        if (!cancelled) setDocPickerLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [docPickerForMaterialId]);
 
   const { data: templatesData, isLoading: templatesLoading } = useQuery<TemplatesResponse>({
     queryKey: ["/api/act-templates"],
@@ -240,6 +311,51 @@ export default function Acts() {
         templateIds: Array.from(selectedTemplates),
       });
 
+      // Persist p.3 materials & formal attachments to DB (used by PDF export defaults)
+      if (p3Materials.length > 0) {
+        const usagesUrl = buildUrl(api.actMaterialUsages.replace.path, { id: act.id });
+        const usagesRes = await fetch(usagesUrl, {
+          method: api.actMaterialUsages.replace.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: p3Materials.map((m, idx) => ({
+              projectMaterialId: m.projectMaterialId,
+              workId: null,
+              batchId: null,
+              qualityDocumentId: m.qualityDocumentId,
+              note: null,
+              orderIndex: idx,
+            })),
+          }),
+          credentials: "include",
+        });
+        if (!usagesRes.ok) {
+          const err = await usagesRes.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to save act material usages");
+        }
+
+        const docIds = Array.from(
+          new Set(p3Materials.map((m) => m.qualityDocumentId).filter((x): x is number => Number.isFinite(x) && (x as number) > 0))
+        );
+
+        const attachmentsUrl = buildUrl(api.actDocumentAttachments.replace.path, { id: act.id });
+        const attachmentsRes = await fetch(attachmentsUrl, {
+          method: api.actDocumentAttachments.replace.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: docIds.map((documentId, idx) => ({
+              documentId,
+              orderIndex: idx,
+            })),
+          }),
+          credentials: "include",
+        });
+        if (!attachmentsRes.ok) {
+          const err = await attachmentsRes.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to save act document attachments");
+        }
+      }
+
       const exportResult = await exportAct.mutateAsync({
         actId: act.id,
         templateIds: Array.from(selectedTemplates),
@@ -249,6 +365,7 @@ export default function Acts() {
       setSelectedTemplates(new Set());
       setDateStart(undefined);
       setDateEnd(undefined);
+      setP3Materials([]);
       setAosrForm({
         actNumber: "",
         actDate: "",
@@ -716,6 +833,84 @@ export default function Acts() {
                               placeholder={language === "ru" ? "Напр.: АЗП-... лист ..." : "e.g. drawing ref"}
                             />
                           </div>
+
+                          <div className="rounded-xl border p-3 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium">
+                                  {language === "ru" ? "Материалы для п.3 (из модуля материалов)" : "P.3 materials (from Materials module)"}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {language === "ru"
+                                    ? "Если список заполнен — оставьте поле “П.3 Материалы” пустым: сервер соберёт текст автоматически."
+                                    : "If selected, keep “P.3 Materials” empty: server will build text automatically."}
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() => setIsP3PickerOpen(true)}
+                                disabled={!objectId}
+                              >
+                                {language === "ru" ? "Выбрать" : "Pick"}
+                              </Button>
+                            </div>
+
+                            {p3Materials.length === 0 ? (
+                              <div className="text-xs text-muted-foreground">
+                                {language === "ru" ? "Материалы не выбраны." : "No materials selected."}
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {p3Materials.map((m, idx) => (
+                                  <div key={m.projectMaterialId} className="rounded-lg border p-2">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <div className="text-sm font-medium truncate">
+                                          {idx + 1}. {m.title}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground truncate">
+                                          {m.qualityLabel ? `Документ: ${m.qualityLabel}` : "Документ: не выбран"}
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2 shrink-0">
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          className="rounded-xl"
+                                          onClick={() => setDocPickerForMaterialId(m.projectMaterialId)}
+                                        >
+                                          {language === "ru" ? "Документ" : "Doc"}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="rounded-xl"
+                                          onClick={() =>
+                                            setP3Materials((prev) => prev.filter((x) => x.projectMaterialId !== m.projectMaterialId))
+                                          }
+                                        >
+                                          {language === "ru" ? "Убрать" : "Remove"}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {derivedAttachments.length > 0 ? (
+                              <div className="text-xs text-muted-foreground">
+                                {language === "ru" ? "Приложения (авто из выбранных документов):" : "Attachments (auto from selected docs):"}{" "}
+                                {derivedAttachments.join("; ")}
+                              </div>
+                            ) : null}
+                          </div>
+
                           <div className="grid gap-1.5">
                             <Label>{language === "ru" ? "П.3 Материалы (как в эталоне, текстом)" : "P.3 Materials (text)"}</Label>
                             <Textarea
@@ -838,6 +1033,138 @@ export default function Acts() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Материалы для п.3 (picker) */}
+      <Dialog open={isP3PickerOpen} onOpenChange={setIsP3PickerOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{language === "ru" ? "Выбрать материалы" : "Select materials"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Input
+              placeholder={language === "ru" ? "Поиск..." : "Search..."}
+              value={p3PickerSearch}
+              onChange={(e) => setP3PickerSearch(e.target.value)}
+            />
+
+            <ScrollArea className="h-[50vh] pr-2">
+              <div className="space-y-2">
+                {projectMaterialsQuery.isLoading ? (
+                  <div className="flex items-center justify-center py-6 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    {language === "ru" ? "Загрузка..." : "Loading..."}
+                  </div>
+                ) : (
+                  ((projectMaterialsQuery.data ?? []) as any[])
+                    .filter((m) => {
+                      const q = p3PickerSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      const title = String(m.nameOverride ?? `Материал #${m.id}`).toLowerCase();
+                      return title.includes(q);
+                    })
+                    .map((m) => {
+                      const id = Number(m.id);
+                      const title = String(m.nameOverride ?? `Материал #${m.id}`);
+                      const checked = p3Materials.some((x) => x.projectMaterialId === id);
+                      return (
+                        <label key={id} className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => {
+                              const next = Boolean(v);
+                              setP3Materials((prev) => {
+                                if (next) {
+                                  if (prev.some((x) => x.projectMaterialId === id)) return prev;
+                                  return [...prev, { projectMaterialId: id, title, qualityDocumentId: null }];
+                                }
+                                return prev.filter((x) => x.projectMaterialId !== id);
+                              });
+                            }}
+                          />
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm truncate">{title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {m.hasUseInActsQualityDoc ? (language === "ru" ? "Готово для актов" : "Ready") : (language === "ru" ? "Нет документа для актов" : "No quality doc")}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsP3PickerOpen(false)}>
+              {language === "ru" ? "Готово" : "Done"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Выбор документа качества для выбранного материала */}
+      <Dialog
+        open={docPickerForMaterialId != null}
+        onOpenChange={(v) => {
+          if (!v) setDocPickerForMaterialId(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{language === "ru" ? "Документ качества" : "Quality document"}</DialogTitle>
+          </DialogHeader>
+
+          {docPickerLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              {language === "ru" ? "Загрузка..." : "Loading..."}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  const mid = docPickerForMaterialId;
+                  if (!mid) return;
+                  setP3Materials((prev) =>
+                    prev.map((m) => (m.projectMaterialId === mid ? { ...m, qualityDocumentId: null, qualityLabel: undefined } : m))
+                  );
+                  setDocPickerForMaterialId(null);
+                }}
+              >
+                {language === "ru" ? "Не указывать документ" : "No document"}
+              </Button>
+
+              {docPickerOptions.length === 0 ? (
+                <div className="text-sm text-muted-foreground">{language === "ru" ? "Нет доступных документов." : "No documents found."}</div>
+              ) : (
+                docPickerOptions.map((opt) => (
+                  <Button
+                    key={opt.id}
+                    variant="secondary"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      const mid = docPickerForMaterialId;
+                      if (!mid) return;
+                      setP3Materials((prev) =>
+                        prev.map((m) =>
+                          m.projectMaterialId === mid ? { ...m, qualityDocumentId: opt.id, qualityLabel: opt.label } : m
+                        )
+                      );
+                      setDocPickerForMaterialId(null);
+                    }}
+                  >
+                    {opt.label}
+                  </Button>
+                ))
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <BottomNav />
     </div>

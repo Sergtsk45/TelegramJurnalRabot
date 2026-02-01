@@ -39,6 +39,13 @@ flowchart LR
     DB --> M[messages (raw + normalized)]
     DB --> A[acts (aggregated)]
     DB --> AT[attachments]
+    DB --> MC[materials_catalog]
+    DB --> PMat[project_materials]
+    DB --> MBa[material_batches]
+    DB --> Docs[documents]
+    DB --> DBind[document_bindings]
+    DB --> AMU[act_material_usages]
+    DB --> ADA[act_document_attachments]
     DB --> S[schedules (gantt)]
     DB --> ST[schedule_tasks (gantt)]
     DB --> O[objects (construction objects)]
@@ -49,7 +56,8 @@ flowchart LR
 
 ## Структура репозитория (важное)
 - `client/` — фронтенд (Vite root)
-  - `client/src/pages/*` — страницы: `Works` (ВОР/ВОИР), `Schedule` (график работ), `Home` (главная/чат-журнал), `Acts` (акты), `WorkLog` (ЖР/ОЖР), `Settings` (язык).
+  - `client/src/pages/*` — страницы: `Works` (ВОР/ВОИР), `Schedule` (график работ), `Home` (главная/чат-журнал), `Acts` (акты), `WorkLog` (ЖР/ОЖР), `Settings` (язык), `SourceData` (исходные), `SourceMaterials`/`SourceMaterialDetail` (материалы), `SourceDocuments` (документы качества).
+    - `SourceData` (`/source-data`) — “дашборд” исходных данных: sticky-текущий объект + адрес, горизонтальные карточки сторон и карточки-разделы (материалы/документы/исполнительные/протоколы) + блок реквизитов/ответственных для редактирования.
   - `client/src/components/*` — общие компоненты (включая нижнюю навигацию).
   - `client/src/hooks/*` — react-query хуки для API.
   - `client/src/lib/*` — queryClient, i18n, utils.
@@ -73,6 +81,13 @@ flowchart LR
 - `objects`: объект строительства (MVP: один «текущий объект»), используется как якорь для исходных данных плейсхолдеров.
 - `object_parties`: стороны объекта (заказчик/подрядчик/проектировщик) с реквизитами (минимум — `fullName`, дополнительно — ИНН/КПП/ОГРН, юр.адрес, телефон, email, реквизиты СРО). Эти данные используются при экспорте АОСР в PDF (если не переопределены через `formData`).
 - `object_responsible_persons`: ответственные лица/подписанты по ролям (ФИО/должность/основание + опционально line/sign).
+- `materials_catalog`: глобальный справочник материалов (наименование, ГОСТ/ТУ, ед. изм., параметры).
+- `project_materials`: материалы в рамках объекта (локальные либо привязанные к справочнику) + агрегаты для UI.
+- `material_batches`: партии/поставки материалов на объект.
+- `documents`: реестр документов качества (сертификаты/паспорта/протоколы и т.п.), scope: `project|global`.
+- `document_bindings`: привязки документов к объекту/материалу/партии + флаги `useInActs`/`isPrimary`.
+- `act_material_usages`: список материалов для п.3 АОСР “При выполнении работ применены…” (с порядком, опциональной привязкой к работе/партии/документу качества).
+- `act_document_attachments`: формальные приложения к АОСР (уникально по (actId, documentId)), отдельно от `attachments`.
 - `works`: позиции ВОР/ВОИР (код, описание, единицы, плановый объём, синонимы).
 - `estimates`: шапка сметы/ЛСР (код, название, регион/квартал, итоги) — импортируется из Excel-выгрузки ГРАНД‑Сметы.
 - `estimate_sections`: разделы сметы (номер/название) — опционально (если файл содержит “Раздел N...”).
@@ -92,6 +107,13 @@ flowchart LR
 
 Текущие ресурсы:
 - **Object (MVP current)**: `GET /api/object/current`, `PATCH /api/object/current`, `GET /api/object/current/source-data`, `PUT /api/object/current/source-data`
+- **Materials Catalog**: `GET /api/materials-catalog`, `POST /api/materials-catalog`
+- **Project Materials**: `GET /api/objects/:objectId/materials`, `POST /api/objects/:objectId/materials`, `GET /api/project-materials/:id`, `PATCH /api/project-materials/:id`, `POST /api/project-materials/:id/save-to-catalog`
+- **Material Batches**: `POST /api/project-materials/:id/batches`, `PATCH /api/material-batches/:id`, `DELETE /api/material-batches/:id` (dev-only)
+- **Documents**: `GET /api/documents`, `POST /api/documents`
+- **Document Bindings**: `POST /api/document-bindings`, `PATCH /api/document-bindings/:id`, `DELETE /api/document-bindings/:id`
+- **Act material usages**: `GET /api/acts/:id/material-usages`, `PUT /api/acts/:id/material-usages`
+- **Act document attachments**: `GET /api/acts/:id/document-attachments`, `PUT /api/acts/:id/document-attachments`
 - **Works**: `GET /api/works`, `POST /api/works`
 - **Estimates (Смета/ЛСР)**: `GET /api/estimates`, `GET /api/estimates/:id`, `POST /api/estimates/import`, `DELETE /api/estimates/:id`
 - **Messages**: `GET /api/messages`, `POST /api/messages`

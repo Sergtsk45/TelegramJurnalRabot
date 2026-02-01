@@ -1,5 +1,131 @@
 # Task Tracker
 
+## Задача: UI — «Материалы»: вертикальный скролл и кнопка «Назад к материалам»
+- **Статус**: Завершена
+- **Описание**: На странице `/source/materials` обеспечить корректную вертикальную прокрутку списка/контента на мобильных. На странице `/source/materials/:id` добавить кнопку возврата на список материалов.
+- **Шаги выполнения**:
+  - [x] Зафиксировать задачу в документации (tasktracker/changelog)
+  - [x] UI: исправить layout/ScrollArea на `/source/materials` для корректного scroll
+  - [x] UI: добавить кнопку «Назад к материалам» на `/source/materials/:id`
+  - [x] Smoke-test: `npm run check` + проверка скролла/навигации на мобильном размере
+- **Зависимости**: `client/src/pages/SourceMaterials.tsx`, `client/src/pages/SourceMaterialDetail.tsx`
+
+---
+
+## Задача: UI — «Материалы»: дата поставки — ввод `дд/мм/гггг` + календарь
+- **Статус**: Завершена
+- **Описание**: Поле «Дата поставки» в форме партии/поставки должно поддерживать ручной ввод в формате `дд/мм/гггг` и выбор даты кликом через выпадающий календарь (Popover/Calendar). В БД/запросах сохраняется ISO `YYYY-MM-DD`.
+- **Шаги выполнения**:
+  - [x] Зафиксировать задачу в документации (tasktracker/changelog)
+  - [x] UI: заменить `type="date"` на контролируемое поле с отображением `dd/mm/yyyy`
+  - [x] UI: добавить выпадающий календарь (Popover/Calendar) для выбора даты кликом
+  - [x] UI: конвертация ввода `dd/mm/yyyy` → ISO `YYYY-MM-DD` для отправки на сервер
+  - [x] UI: отображение даты поставки привести к `dd/mm/yyyy` в деталке материала
+  - [x] Smoke-test: `npm run check`
+- **Зависимости**: `client/src/components/materials/BatchForm.tsx`, `client/src/components/materials/MaterialDetailView.tsx`
+
+---
+
+## Задача: UI — исправить “прозрачные” выпадающие списки и календари (Select/Popover)
+- **Статус**: Завершена
+- **Описание**: В выпадающих списках (Radix Select) и календарях (Popover/Calendar) фон контента должен быть непрозрачным. Сейчас оверлеи выглядят прозрачными из-за отсутствующих CSS-переменных темы `--popover*`/`--card*` (Tailwind цвета `bg-popover`, `bg-card`).
+- **Шаги выполнения**:
+  - [x] Зафиксировать задачу в документации (tasktracker/changelog)
+  - [x] UI: добавить недостающие переменные `--popover*` и `--card*` в `client/src/index.css` для светлой/тёмной темы
+  - [x] Smoke-test: проверить Select (тип документа в мастере материала) и календари в актах/поставке
+- **Зависимости**: `client/src/index.css`, `client/src/components/ui/select.tsx`, `client/src/components/ui/popover.tsx`
+
+---
+
+## Задача: UI — материалы: добавить партию и привязать документ к существующему материалу (Roadmap)
+- **Статус**: Завершена
+- **Описание**: На странице материала `/source/materials/:id` реализовать действия из `docs/RoadmapIsodnieDannie.md`: добавить новую партию/поставку (создание `material_batches`) и привязать документ качества к материалу (создание `document_bindings`, выбор из реестра или создание нового).
+- **Шаги выполнения**:
+  - [x] Зафиксировать задачу в документации (tasktracker/changelog)
+  - [x] UI: CTA «Добавить партию» в блоке партий → bottom sheet (Drawer) с `BatchForm` → `POST /api/project-materials/:id/batches`
+  - [x] UI: CTA «Привязать документ» в блоке документов → bottom sheet (Drawer): выбор из реестра / создать новый → `POST /api/document-bindings`
+  - [x] UX: если “Нет документа качества для актов” — показать кнопку “Добавить” (открывает привязку документа)
+  - [x] Smoke-test: `npm run check`, ручная проверка на мобильном размере
+- **Зависимости**: `client/src/pages/SourceMaterialDetail.tsx`, `client/src/components/materials/MaterialDetailView.tsx`, `client/src/hooks/use-materials.ts`, `client/src/hooks/use-documents.ts`
+
+---
+
+## Задача: UI — экран «Исходные»: сценарии и карточки-разделы (Roadmap 52–114)
+- **Статус**: Завершена
+- **Описание**: Привести страницу `/source-data` в соответствие с UX из `docs/RoadmapIsodnieDannie.md` (52–114): sticky-выбор объекта, строка адреса, горизонтальный скролл сторон/участников и карточки-разделы (не табы) со счётчиками и CTA «Добавить».
+- **Шаги выполнения**:
+  - [x] Зафиксировать задачу в документации (tasktracker/changelog)
+  - [x] UI: sticky-блок «Объект: … ▾» + адрес (1 строка) + индикатор сохранения
+  - [x] UI: блок «Стороны/участники» с горизонтальным скроллом карточек (заказчик/подрядчик/проектировщик)
+  - [x] UI: блок «Разделы» с 4 карточками, счётчиками и CTA «Добавить»
+  - [x] Smoke-test: `npm run check`; переходы в `/source/materials` и `/source/documents`, кнопки «Добавить» открывают мастер/диалог
+- **Зависимости**: `client/src/pages/SourceData.tsx`, `docs/RoadmapIsodnieDannie.md`
+
+---
+
+## Задача: UI — «Исходные»: баннер «Ответственные лица» в карусели + модальное редактирование
+- **Статус**: Завершена
+- **Описание**: Добавить в горизонтальную карусель на `/source-data` баннер «Ответственные лица». По клику открывать окно редактирования ответственных лиц. Нижний список/формы ответственных удалить (без дублирования на экране).
+- **Шаги выполнения**:
+  - [x] Зафиксировать изменение в документации (tasktracker/changelog)
+  - [x] UI: добавить карточку «Ответственные лица» в карусель
+  - [x] UI: перенести форму ответственных лиц в `Dialog` (модальное окно)
+  - [x] UI: удалить нижний список/формы (Accordion) со страницы
+  - [x] Smoke-test: `npm run check`
+- **Зависимости**: `client/src/pages/SourceData.tsx`
+
+---
+
+## Задача: UI — мастер добавления материала: синхронизация единиц измерения (материал → партия)
+- **Статус**: Завершена
+- **Описание**: В мастере добавления материала при вводе “Ед. измерения” (шаг 2, “Создать новый”) автоматически подставлять это значение в “Ед.” партии (шаг 3), **если поле партии ещё пустое** (не перетирать ручной ввод).
+- **Шаги выполнения**:
+  - [x] Зафиксировать изменение в документации (tasktracker/changelog)
+  - [x] UI: синхронизировать `baseUnitOverride` → `batch.unit` при вводе, если `batch.unit` пустой
+  - [x] UI: при включении “Добавить партию/поставку” подставлять единицу из `baseUnitOverride`, если `batch.unit` пустой
+  - [x] Smoke-test: `npm run check`
+- **Зависимости**: `client/src/components/materials/MaterialWizard.tsx`, `client/src/components/materials/BatchForm.tsx`
+
+---
+
+## Задача: Roadmap "Исходные данные" — исправление схемы БД и приведение к стандартам rulesdb.mdc
+- **Статус**: Завершена
+- **Описание**: Проверить соответствие roadmap'а `docs/RoadmapIsodnieDannie.md` правилам проектирования БД из `rulesdb.mdc` и архитектуре проекта. Внести исправления: унифицировать именование (`objectId` вместо `projectId`), добавить типы данных, CHECK constraints, индексы, триггеры, разрешить коллизию `attachments` vs `act_document_attachments`, добавить связь материал ↔ работа.
+- **Шаги выполнения**:
+  - [x] Проанализировать roadmap на соответствие `project.md` и `rulesdb.mdc`
+  - [x] Унифицировать именование: `objectId` вместо `projectId` во всех таблицах и API
+  - [x] Доработать схему таблиц: добавить типы `bigint GENERATED ALWAYS AS IDENTITY`, `created_at`/`updated_at` (timestamptz)
+  - [x] Добавить CHECK constraints для всех статусов/типов (`doc_type`, `scope`, `category`, `binding_role`)
+  - [x] Добавить явные политики `ON DELETE` для всех FK (cascade/restrict/setNull)
+  - [x] Указать доменный масштаб для `material_batches.quantity`: `numeric(14,3)`
+  - [x] Добавить описание триггеров `set_updated_at()` для всех таблиц
+  - [x] Создать сводную таблицу индексов (раздел 2.9)
+  - [x] Добавить поле `workId` в `act_material_usages` для связи материал ↔ работа
+  - [x] Разрешить коллизию `attachments` vs `act_document_attachments`: выбран вариант "две таблицы" (раздел 8)
+  - [x] Обновить API endpoints: `/api/objects/:objectId/materials` вместо `/api/projects/:projectId/materials`
+  - [x] Обновить документацию (changelog, tasktracker)
+- **Зависимости**: `docs/RoadmapIsodnieDannie.md`, `docs/project.md`, `.cursor/rules/rulesdb.mdc`
+
+---
+
+## Задача: Исходные данные — материалы/документы качества + интеграция с АОСР (MVP)
+- **Статус**: Завершена
+- **Описание**: Реализовать модуль материалов (справочник + материалы объекта), партии/поставки, реестр документов качества и привязки к материалам/партиям, а также подготовить интеграцию с АОСР (п.3 “применены материалы” и “приложения”).
+- **Шаги выполнения**:
+  - [x] DB: добавить SQL-миграцию `migrations/0005_materials_documents.sql` (7 таблиц + индексы + CHECK + updated_at triggers)
+  - [x] Shared: добавить Drizzle-таблицы/типы в `shared/schema.ts`
+  - [x] Shared: добавить API-контракты в `shared/routes.ts` (materialsCatalog/projectMaterials/batches/documents/bindings/actUsages/actDocAttachments)
+  - [x] Backend: реализовать методы storage в `server/storage.ts`
+  - [x] Backend: добавить маршруты в `server/routes.ts`
+  - [x] Frontend: хуки React Query для материалов/документов/актов
+  - [x] Frontend: страницы `/source/materials`, `/source/materials/:id`, `/source/documents` и быстрые переходы с `/source-data`
+  - [x] PDF: сборка `p3MaterialsText` и `attachmentsText` из БД при экспорте акта (если не переопределено `formData`)
+  - [x] UI актов: выбор материалов для п.3 и управление приложениями (dedupe по документам)
+  - [x] Smoke-test: `npm run check`, `npm run build`
+- **Зависимости**: `shared/schema.ts`, `shared/routes.ts`, `server/storage.ts`, `server/routes.ts`, `server/pdfGenerator.ts`, `client/src/pages/*`
+
+---
+
 ## Задача: АОСР — ультратонкие линии подчёркивания 0.1pt и выравнивание подсказок по центру
 - **Статус**: Завершена
 - **Описание**: Сделать линии подчёркивания в бланковых полях ультратонкими (0.1pt) и выровнять все hint-подсказки по центру для улучшения визуального оформления документа.

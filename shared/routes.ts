@@ -663,6 +663,64 @@ export const api = {
         404: z.object({ message: z.string() }),
       },
     },
+    sourceInfo: {
+      method: 'GET' as const,
+      path: '/api/schedules/:id/source-info',
+      responses: {
+        200: z.object({
+          sourceType: z.enum(['works', 'estimate']),
+          estimateId: z.number().nullable(),
+          estimateName: z.string().nullable(),
+          tasksCount: z.number(),
+          affectedActNumbers: z.array(z.number().int().positive()),
+        }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    changeSource: {
+      method: 'POST' as const,
+      path: '/api/schedules/:id/change-source',
+      input: z.object({
+        newSourceType: z.enum(['works', 'estimate']),
+        estimateId: z.number().int().positive().optional(),
+        confirmReset: z.boolean(),
+      }),
+      responses: {
+        200: z.union([
+          z.object({
+            requiresConfirmation: z.literal(true),
+            message: z.string(),
+            tasksCount: z.number(),
+            affectedActNumbers: z.array(z.number().int().positive()),
+          }),
+          z.object({
+            success: z.literal(true),
+            deletedTasks: z.number(),
+            clearedActs: z.number(),
+          }),
+        ]),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    bootstrapFromEstimate: {
+      method: 'POST' as const,
+      path: '/api/schedules/:id/bootstrap-from-estimate',
+      input: z.object({
+        positionIds: z.array(z.number().int().positive()).optional(),
+        defaultStartDate: z.string().optional(), // YYYY-MM-DD
+        defaultDurationDays: z.number().int().min(1).optional(),
+      }),
+      responses: {
+        200: z.object({
+          scheduleId: z.number(),
+          created: z.number(),
+          skipped: z.number(),
+        }),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
   },
   scheduleTasks: {
     patch: {

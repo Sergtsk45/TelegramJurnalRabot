@@ -1,5 +1,25 @@
 # Task Tracker
 
+## Задача: График работ из Сметы (Вариант 1 — "Правильная модель")
+- **Статус**: Завершена
+- **Описание**: Добавить возможность строить график работ из позиций сметы (estimate_positions) вместо ВОР. График имеет единственный источник (ВОР или Смета), смена источника требует подтверждения и удаляет все задачи. Акты хранят явный `sourceType` + `sourceId` для каждой строки работ. Основные задачи графика создаются только для позиций ГЭСН/ФЕР/ТЕР, вспомогательные позиции (ФСБЦ, прайс) отображаются как подстроки (по умолчанию свёрнуты).
+- **Шаги выполнения**:
+  - [x] DB: миграция `0006_schedule_estimate_source.sql` (schedules.sourceType, schedules.estimateId, schedule_tasks.estimatePositionId)
+  - [x] Shared: обновить типы `Schedule`, `ScheduleTask`, `ActWorkItem`, API-контракты в `shared/routes.ts`
+  - [x] Shared: добавить Zod-схему `actWorkItemSchema`
+  - [x] Backend: реализовать `storage.changeScheduleSource()`, `storage.bootstrapScheduleFromEstimate()`, `storage.getEstimatePositionsByIds()`
+  - [x] Backend: хелпер `isMainEstimatePosition()` для фильтра основных позиций (ГЭСН/ФЕР/ТЕР)
+  - [x] Backend: обновить генерацию актов (ветвление по `schedule.sourceType`)
+  - [x] Backend: новые эндпоинты `source-info`, `change-source`, `bootstrap-from-estimate` в `server/routes.ts`
+  - [x] Frontend: хуки `useScheduleSourceInfo()`, `useChangeScheduleSource()`, `useBootstrapScheduleFromEstimate()`, `useGenerateActsFromSchedule()`
+  - [x] Frontend: UI на `/schedule` — селектор источника (ВОР/Смета), кнопка генерации актов, диалог подтверждения смены (регистронезависимая проверка)
+  - [x] Frontend: группировка вспомогательных позиций под основными на клиенте
+  - [x] UI: кнопка expand/collapse для вспомогательных подстрок (только в левой колонке, не влияют на таймлайн)
+  - [x] Документация: обновить `project.md`, `tasktracker.md`, `changelog.md`
+- **Зависимости**: Модуль "Смета/ЛСР", Модуль "График работ"
+
+---
+
 ## Задача: UI — «Материалы»: вертикальный скролл и кнопка «Назад к материалам»
 - **Статус**: Завершена
 - **Описание**: На странице `/source/materials` обеспечить корректную вертикальную прокрутку списка/контента на мобильных. На странице `/source/materials/:id` добавить кнопку возврата на список материалов.

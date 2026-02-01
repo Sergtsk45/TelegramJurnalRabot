@@ -108,3 +108,117 @@ export function usePatchScheduleTask() {
   });
 }
 
+export function useGenerateActsFromSchedule(scheduleId: number | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!scheduleId) throw new Error("Schedule id is required");
+      const url = buildUrl(api.schedules.generateActs.path, { id: scheduleId });
+      const res = await fetch(url, {
+        method: api.schedules.generateActs.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to generate acts");
+      }
+
+      return api.schedules.generateActs.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      // Invalidate acts list and schedule
+      queryClient.invalidateQueries({ queryKey: ["/api/acts"] });
+      if (scheduleId) {
+        queryClient.invalidateQueries({ queryKey: [api.schedules.get.path, scheduleId] });
+      }
+    },
+  });
+}
+
+export function useScheduleSourceInfo(scheduleId: number | null | undefined) {
+  return useQuery({
+    queryKey: [api.schedules.sourceInfo.path, scheduleId],
+    queryFn: async () => {
+      if (!scheduleId) throw new Error("Schedule id is required");
+      const url = buildUrl(api.schedules.sourceInfo.path, { id: scheduleId });
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch source info");
+      }
+      return api.schedules.sourceInfo.responses[200].parse(await res.json());
+    },
+    enabled: !!scheduleId,
+  });
+}
+
+export function useChangeScheduleSource(scheduleId: number | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      newSourceType: 'works' | 'estimate';
+      estimateId?: number;
+      confirmReset: boolean;
+    }) => {
+      if (!scheduleId) throw new Error("Schedule id is required");
+      const url = buildUrl(api.schedules.changeSource.path, { id: scheduleId });
+      const res = await fetch(url, {
+        method: api.schedules.changeSource.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to change schedule source");
+      }
+
+      return api.schedules.changeSource.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      if (!scheduleId) return;
+      queryClient.invalidateQueries({ queryKey: [api.schedules.get.path, scheduleId] });
+      queryClient.invalidateQueries({ queryKey: [api.schedules.sourceInfo.path, scheduleId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/acts"] });
+    },
+  });
+}
+
+export function useBootstrapScheduleFromEstimate(scheduleId: number | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data?: {
+      positionIds?: number[];
+      defaultStartDate?: string; // YYYY-MM-DD
+      defaultDurationDays?: number;
+    }) => {
+      if (!scheduleId) throw new Error("Schedule id is required");
+      const url = buildUrl(api.schedules.bootstrapFromEstimate.path, { id: scheduleId });
+      const res = await fetch(url, {
+        method: api.schedules.bootstrapFromEstimate.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data ?? {}),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to bootstrap from estimate");
+      }
+
+      return api.schedules.bootstrapFromEstimate.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      if (!scheduleId) return;
+      queryClient.invalidateQueries({ queryKey: [api.schedules.get.path, scheduleId] });
+    },
+  });
+}
+

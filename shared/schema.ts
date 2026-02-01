@@ -205,6 +205,16 @@ export const messages = pgTable("messages", {
   isProcessed: boolean("is_processed").default(false),
 });
 
+// Type for a single work item in an act (with explicit source)
+export type ActWorkItem = {
+  sourceType: 'works' | 'estimate';  // Source of this work item
+  sourceId: number;                   // ID from works or estimate_positions
+  description: string;                // Work description/name
+  quantity: number;                   // Work quantity
+  unit?: string;                      // Unit of measurement (optional)
+  code?: string;                      // Work code/GESN code (optional)
+};
+
 // Acts (AOSR)
 export const acts = pgTable("acts", {
   id: serial("id").primaryKey(),
@@ -215,12 +225,8 @@ export const acts = pgTable("acts", {
   dateEnd: date("date_end"),
   location: text("location"),
   status: text("status").default("draft"), // draft, generated, signed
-  // Aggregated works for this act
-  worksData: jsonb("works_data").$type<{
-    workId: number;
-    quantity: number;
-    description: string;
-  }[]>(),
+  // Aggregated works for this act (with explicit source reference)
+  worksData: jsonb("works_data").$type<ActWorkItem[]>(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -448,6 +454,10 @@ export const schedules = pgTable("schedules", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   calendarStart: date("calendar_start"),
+  // Source of works for this schedule: 'works' (BoQ) or 'estimate' (LSR/Estimate)
+  sourceType: text("source_type").notNull().default("works"),
+  // If sourceType='estimate', this is the estimate ID
+  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -458,9 +468,12 @@ export const scheduleTasks = pgTable(
     scheduleId: integer("schedule_id")
       .notNull()
       .references(() => schedules.id),
-    workId: integer("work_id")
-      .notNull()
-      .references(() => works.id),
+    // Source reference: either workId (from BoQ) or estimatePositionId (from Estimate)
+    // Exactly one must be set (enforced by CHECK constraint in migration)
+    workId: integer("work_id").references(() => works.id),
+    estimatePositionId: integer("estimate_position_id").references(() => estimatePositions.id, {
+      onDelete: "cascade",
+    }),
     // Act number this task belongs to (global). Nullable = not assigned to an act.
     actNumber: integer("act_number"),
     titleOverride: text("title_override"),
@@ -472,6 +485,7 @@ export const scheduleTasks = pgTable(
   (t) => ({
     scheduleIdIdx: index("schedule_tasks_schedule_id_idx").on(t.scheduleId),
     workIdIdx: index("schedule_tasks_work_id_idx").on(t.workId),
+    estimatePositionIdIdx: index("schedule_tasks_estimate_position_id_idx").on(t.estimatePositionId),
     scheduleOrderIdx: index("schedule_tasks_schedule_order_idx").on(t.scheduleId, t.orderIndex),
     scheduleActNumberIdx: index("schedule_tasks_schedule_act_number_idx").on(t.scheduleId, t.actNumber),
   })
@@ -499,6 +513,16 @@ export const insertActTemplateSchema = createInsertSchema(actTemplates).omit({ i
 export const insertActTemplateSelectionSchema = createInsertSchema(actTemplateSelections).omit({ id: true, generatedAt: true });
 export const insertScheduleSchema = createInsertSchema(schedules).omit({ id: true, createdAt: true });
 export const insertScheduleTaskSchema = createInsertSchema(scheduleTasks).omit({ id: true, createdAt: true });
+
+// Zod schema for ActWorkItem (explicit source validation)
+export const actWorkItemSchema = z.object({
+  sourceType: z.enum(['works', 'estimate']),
+  sourceId: z.number().int().positive(),
+  description: z.string(),
+  quantity: z.number(),
+  unit: z.string().optional(),
+  code: z.string().optional(),
+});
 
 // === EXPLICIT API TYPES ===
 

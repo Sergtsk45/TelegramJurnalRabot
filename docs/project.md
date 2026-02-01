@@ -119,7 +119,13 @@ flowchart LR
 - **Messages**: `GET /api/messages`, `POST /api/messages`
 - **Acts**: `GET /api/acts`, `POST /api/acts/generate` (legacy), `GET /api/acts/:id`, `POST /api/acts/create-with-templates` (legacy), `POST /api/acts/:id/export`
 - **Act Templates**: `GET /api/act-templates`
-- **Schedules**: `GET /api/schedules/default`, `POST /api/schedules`, `GET /api/schedules/:id`, `POST /api/schedules/:id/bootstrap-from-works`, `POST /api/schedules/:id/generate-acts`
+- **Schedules**: 
+  - `GET /api/schedules/default`, `POST /api/schedules`, `GET /api/schedules/:id`
+  - `POST /api/schedules/:id/bootstrap-from-works` — создать задачи из ВОР
+  - `POST /api/schedules/:id/bootstrap-from-estimate` — создать задачи из позиций сметы
+  - `POST /api/schedules/:id/generate-acts` — сформировать/обновить акты из графика
+  - `GET /api/schedules/:id/source-info` — информация об источнике графика
+  - `POST /api/schedules/:id/change-source` — сменить источник графика (ВОР ↔ Смета)
 - **Schedule Tasks**: `PATCH /api/schedule-tasks/:id`
 
 Дополнительно:

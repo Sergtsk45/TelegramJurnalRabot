@@ -1,5 +1,42 @@
 # Changelog
 
+## [2026-02-01] - График работ из Сметы (с явным источником в acts.worksData)
+### Добавлено
+- **Модель данных**: график может строиться из двух источников — ВОР или Смета (`schedules.sourceType`, `schedules.estimateId`)
+- **Schedule tasks**: `schedule_tasks.estimatePositionId` для задач из сметы (взаимоисключающее с `workId`)
+- **Acts worksData**: новая структура с явным указанием источника (`sourceType`, `sourceId`) вместо `workId`
+- **API endpoints**: 
+  - `GET /api/schedules/:id/source-info` — информация об источнике графика
+  - `POST /api/schedules/:id/change-source` — смена источника с подтверждением
+  - `POST /api/schedules/:id/bootstrap-from-estimate` — создание задач из позиций сметы (только ГЭСН/ФЕР/ТЕР)
+- **Storage методы**: `changeScheduleSource()`, `bootstrapScheduleFromEstimate()`, `getEstimatePositionsByIds()`, хелпер `isMainEstimatePosition()`
+- **UI**: 
+  - Селектор источника на странице `/schedule`: **ВОР** или **Смета (выбор из списка импортированных смет)**
+  - Кнопка «Сформировать акты» на странице графика
+  - Диалог подтверждения смены источника с вводом "ПОДТВЕРЖДАЮ" (регистронезависимая проверка)
+  - Автоматический bootstrap задач после смены источника (чтобы график сразу заполнялся)
+  - **Вспомогательные позиции сметы** (ФСБЦ, прайс и т.д.): отображаются как подстроки под основными (ГЭСН/ФЕР/ТЕР), по умолчанию свёрнуты, доступны по кнопке-стрелке в левой колонке графика
+
+### Изменено
+- **Миграция БД**: `migrations/0006_schedule_estimate_source.sql` — расширение схемы графика и задач
+- `shared/schema.ts`: новый тип `ActWorkItem` с явным `sourceType` + `sourceId`, обновлены `Schedule` и `ScheduleTask`
+- `shared/schema.ts`: добавлена Zod-схема `actWorkItemSchema` для валидации
+- `shared/routes.ts`: новые API-контракты для управления источником графика
+- `server/storage.ts`: расширен интерфейс `IStorage` и класс `DatabaseStorage`
+- `server/routes.ts`: генерация актов (`generateActs`) теперь ветвится по `schedule.sourceType` (works/estimate)
+- `client/src/hooks/use-schedules.ts`: новые хуки `useScheduleSourceInfo()`, `useChangeScheduleSource()`, `useBootstrapScheduleFromEstimate()`, `useGenerateActsFromSchedule()`
+- `client/src/pages/Schedule.tsx`: интеграция выбора источника и диалога подтверждения смены
+
+### Исправлено
+- Нет
+
+### Примечания
+- При смене источника все задачи графика удаляются, списки работ в актах очищаются (сами акты сохраняются)
+- График строго привязан к одному источнику (ВОР или конкретная смета)
+- Структура `acts.worksData` теперь универсальная и явно указывает источник каждой строки
+
+---
+
 ## [2026-02-01] - UI: экран «Исходные» приведён к сценариям (карточки-разделы)
 ### Добавлено
 - Sticky-блок текущего объекта на экране `/source-data`: «Объект: … ▾» + адрес одной строкой

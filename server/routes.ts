@@ -672,9 +672,12 @@ export async function registerRoutes(
         const work = await storage.getWorkByCode(code);
         if (work) {
           worksData.push({
-            workId: work.id,
+            sourceType: 'works' as const,
+            sourceId: work.id,
             quantity,
-            description: work.description
+            description: work.description,
+            unit: work.unit,
+            code: work.code,
           });
         }
       }
@@ -822,7 +825,6 @@ export async function registerRoutes(
         let minStart: string | null = null;
         let maxEnd: string | null = null;
 
-        const workIdsSet = new Set<number>();
         for (const t of tasks) {
           const start = String(t.startDate);
           const durationDays = Number(t.durationDays ?? 0);
@@ -830,30 +832,74 @@ export async function registerRoutes(
 
           if (!minStart || start < minStart) minStart = start;
           if (!maxEnd || end > maxEnd) maxEnd = end;
-
-          workIdsSet.add(Number(t.workId));
         }
 
-        const workIds = Array.from(workIdsSet);
-        const works = await storage.getWorksByIds(workIds);
-        works.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+        // Generate worksData based on schedule source type
+        let worksData: Array<{
+          sourceType: 'works' | 'estimate';
+          sourceId: number;
+          description: string;
+          quantity: number;
+          unit?: string;
+          code?: string;
+        }>;
 
-        const worksData = works.map((w) => {
-          const rawQty: any = (w as any).quantityTotal;
-          const qty = rawQty == null ? 0 : Number(rawQty);
-          return {
-            workId: w.id,
-            quantity: Number.isFinite(qty) ? qty : 0,
-            description: w.description,
-          };
-        });
+        if (schedule.sourceType === 'estimate') {
+          // Source: Estimate positions
+          const positionIdsSet = new Set<number>();
+          for (const t of tasks) {
+            if (t.estimatePositionId) {
+              positionIdsSet.add(Number(t.estimatePositionId));
+            }
+          }
+          const positionIds = Array.from(positionIdsSet);
+          const positions = await storage.getEstimatePositionsByIds(positionIds);
+          positions.sort((a, b) => String(a.code ?? '').localeCompare(String(b.code ?? '')));
+
+          worksData = positions.map((p) => {
+            const rawQty: any = (p as any).quantity;
+            const qty = rawQty == null ? 0 : Number(rawQty);
+            return {
+              sourceType: 'estimate' as const,
+              sourceId: p.id,
+              description: p.name,
+              quantity: Number.isFinite(qty) ? qty : 0,
+              unit: p.unit ?? undefined,
+              code: p.code ?? undefined,
+            };
+          });
+        } else {
+          // Source: Works (BoQ)
+          const workIdsSet = new Set<number>();
+          for (const t of tasks) {
+            if (t.workId) {
+              workIdsSet.add(Number(t.workId));
+            }
+          }
+          const workIds = Array.from(workIdsSet);
+          const works = await storage.getWorksByIds(workIds);
+          works.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+
+          worksData = works.map((w) => {
+            const rawQty: any = (w as any).quantityTotal;
+            const qty = rawQty == null ? 0 : Number(rawQty);
+            return {
+              sourceType: 'works' as const,
+              sourceId: w.id,
+              description: w.description,
+              quantity: Number.isFinite(qty) ? qty : 0,
+              unit: w.unit,
+              code: w.code,
+            };
+          });
+        }
 
         const result = await storage.upsertActByNumber({
           actNumber,
           dateStart: minStart,
           dateEnd: maxEnd,
           status: "draft",
-          worksData,
+          worksData: worksData as any,
         });
 
         if (result.created) created++;
@@ -872,6 +918,129 @@ export async function registerRoutes(
         return res.status(400).json({ message: err.errors[0].message });
       }
       console.error("Generate acts from schedule failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Get schedule source info
+  app.get(api.schedules.sourceInfo.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "Invalid schedule id" });
+      }
+
+      const info = await storage.getScheduleSourceInfo(id);
+      if (!info) {
+        return res.status(404).json({ message: "Schedule not found" });
+      }
+
+      return res.status(200).json(info);
+    } catch (err) {
+      console.error("Get schedule source info failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Change schedule source
+  app.post(api.schedules.changeSource.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "Invalid schedule id" });
+      }
+
+      const input = api.schedules.changeSource.input.parse(req.body);
+
+      // Validate: if estimate source, estimateId must be provided
+      if (input.newSourceType === 'estimate' && !input.estimateId) {
+        return res.status(400).json({ message: 'estimateId is required when newSourceType is "estimate"' });
+      }
+
+      // Get current state
+      const info = await storage.getScheduleSourceInfo(id);
+      if (!info) {
+        return res.status(404).json({ message: "Schedule not found" });
+      }
+
+      // If not confirmed and there are tasks, return confirmation prompt
+      if (!input.confirmReset && info.tasksCount > 0) {
+        return res.status(200).json({
+          requiresConfirmation: true,
+          message: `При смене источника будут удалены все задачи графика (${info.tasksCount} шт.) и очищены списки работ в актах (${info.affectedActNumbers.length} шт.)`,
+          tasksCount: info.tasksCount,
+          affectedActNumbers: info.affectedActNumbers,
+        });
+      }
+
+      // Execute change
+      await storage.changeScheduleSource({
+        scheduleId: id,
+        newSourceType: input.newSourceType,
+        newEstimateId: input.estimateId,
+      });
+
+      return res.status(200).json({
+        success: true,
+        deletedTasks: info.tasksCount,
+        clearedActs: info.affectedActNumbers.length,
+      });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Change schedule source failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Bootstrap schedule from estimate
+  app.post(api.schedules.bootstrapFromEstimate.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "Invalid schedule id" });
+      }
+
+      const input = api.schedules.bootstrapFromEstimate.input.parse(req.body);
+
+      // Get schedule to check source
+      const schedule = await storage.getScheduleWithTasks(id);
+      if (!schedule) {
+        return res.status(404).json({ message: "Schedule not found" });
+      }
+
+      if (schedule.sourceType !== 'estimate') {
+        return res.status(400).json({ message: 'Schedule source type must be "estimate"' });
+      }
+
+      if (!schedule.estimateId) {
+        return res.status(400).json({ message: 'Schedule has no estimateId' });
+      }
+
+      const defaultStartDate = input.defaultStartDate || new Date().toISOString().split('T')[0];
+      const defaultDurationDays = input.defaultDurationDays ?? 1;
+
+      const result = await storage.bootstrapScheduleTasksFromEstimate({
+        scheduleId: id,
+        estimateId: schedule.estimateId,
+        positionIds: input.positionIds,
+        defaultStartDate,
+        defaultDurationDays,
+      });
+
+      return res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      if ((err as Error).message === "SCHEDULE_NOT_FOUND") {
+        return res.status(404).json({ message: "Schedule not found" });
+      }
+      if ((err as Error).message === "SCHEDULE_SOURCE_MISMATCH") {
+        return res.status(400).json({ message: "Schedule source type does not match" });
+      }
+      console.error("Bootstrap from estimate failed:", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   });

@@ -79,6 +79,17 @@ type ObjectPersonRole =
   | "rep_designer"
   | "rep_work_performer";
 
+/**
+ * Determines if an estimate position is a "main" work (for schedule tasks).
+ * Main positions have code starting with ГЭСН, ФЕР, ТЕР (case-insensitive).
+ * Other positions (ФСБЦ, прайс, etc.) are "auxiliary" and shown as sub-items.
+ */
+function isMainEstimatePosition(position: { code?: string | null }): boolean {
+  const code = String(position.code ?? "").trim().toUpperCase();
+  if (!code) return false;
+  return code.startsWith("ГЭСН") || code.startsWith("ФЕР") || code.startsWith("ТЕР");
+}
+
 export interface IStorage {
   // Objects / Source data (MVP: single default object)
   getOrCreateDefaultObject(): Promise<DbObject>;
@@ -244,6 +255,30 @@ export interface IStorage {
     id: number,
     patch: Partial<Pick<ScheduleTask, "titleOverride" | "startDate" | "durationDays" | "orderIndex" | "actNumber">>
   ): Promise<ScheduleTask | undefined>;
+  
+  // Schedule source (works vs estimate)
+  getScheduleSourceInfo(scheduleId: number): Promise<{
+    sourceType: 'works' | 'estimate';
+    estimateId: number | null;
+    estimateName: string | null;
+    tasksCount: number;
+    affectedActNumbers: number[];
+  } | undefined>;
+  changeScheduleSource(params: {
+    scheduleId: number;
+    newSourceType: 'works' | 'estimate';
+    newEstimateId?: number;
+  }): Promise<void>;
+  bootstrapScheduleTasksFromEstimate(params: {
+    scheduleId: number;
+    estimateId: number;
+    positionIds?: number[];
+    defaultStartDate: string;
+    defaultDurationDays: number;
+  }): Promise<{ scheduleId: number; created: number; skipped: number }>;
+  
+  // Estimate positions
+  getEstimatePositionsByIds(ids: number[]): Promise<EstimatePosition[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1412,6 +1447,174 @@ export class DatabaseStorage implements IStorage {
 
     const [updated] = await db.update(scheduleTasks).set(updateData).where(eq(scheduleTasks.id, id)).returning();
     return updated;
+  }
+
+  // Schedule source management (works vs estimate)
+  async getScheduleSourceInfo(scheduleId: number): Promise<{
+    sourceType: 'works' | 'estimate';
+    estimateId: number | null;
+    estimateName: string | null;
+    tasksCount: number;
+    affectedActNumbers: number[];
+  } | undefined> {
+    const [schedule] = await db.select().from(schedules).where(eq(schedules.id, scheduleId));
+    if (!schedule) return undefined;
+
+    const tasks = await db
+      .select({ actNumber: scheduleTasks.actNumber })
+      .from(scheduleTasks)
+      .where(eq(scheduleTasks.scheduleId, scheduleId));
+
+    const affectedActNumbers = Array.from(new Set(
+      tasks.map(t => t.actNumber).filter((n): n is number => n != null)
+    ));
+
+    let estimateName: string | null = null;
+    if (schedule.estimateId) {
+      const [estimate] = await db
+        .select({ name: estimates.name })
+        .from(estimates)
+        .where(eq(estimates.id, schedule.estimateId));
+      estimateName = estimate?.name ?? null;
+    }
+
+    return {
+      sourceType: (schedule.sourceType as 'works' | 'estimate') ?? 'works',
+      estimateId: schedule.estimateId,
+      estimateName,
+      tasksCount: tasks.length,
+      affectedActNumbers,
+    };
+  }
+
+  async changeScheduleSource(params: {
+    scheduleId: number;
+    newSourceType: 'works' | 'estimate';
+    newEstimateId?: number;
+  }): Promise<void> {
+    const { scheduleId, newSourceType, newEstimateId } = params;
+
+    await db.transaction(async (tx) => {
+      // 1. Get affected act numbers
+      const tasks = await tx
+        .select({ actNumber: scheduleTasks.actNumber })
+        .from(scheduleTasks)
+        .where(eq(scheduleTasks.scheduleId, scheduleId));
+
+      const affectedActNumbers = Array.from(new Set(
+        tasks.map(t => t.actNumber).filter((n): n is number => n != null)
+      ));
+
+      // 2. Clear worksData in affected acts
+      if (affectedActNumbers.length > 0) {
+        await tx
+          .update(acts)
+          .set({ worksData: [] as any })
+          .where(inArray(acts.actNumber, affectedActNumbers));
+      }
+
+      // 3. Delete all tasks
+      await tx
+        .delete(scheduleTasks)
+        .where(eq(scheduleTasks.scheduleId, scheduleId));
+
+      // 4. Update schedule source
+      await tx
+        .update(schedules)
+        .set({
+          sourceType: newSourceType,
+          estimateId: newSourceType === 'estimate' ? newEstimateId : null,
+        })
+        .where(eq(schedules.id, scheduleId));
+    });
+  }
+
+  async bootstrapScheduleTasksFromEstimate(params: {
+    scheduleId: number;
+    estimateId: number;
+    positionIds?: number[];
+    defaultStartDate: string;
+    defaultDurationDays: number;
+  }): Promise<{ scheduleId: number; created: number; skipped: number }> {
+    const { scheduleId, estimateId, positionIds, defaultStartDate, defaultDurationDays } = params;
+
+    return await db.transaction(async (tx) => {
+      // Check schedule and source match
+      const [schedule] = await tx.select().from(schedules).where(eq(schedules.id, scheduleId));
+      if (!schedule) {
+        throw new Error("SCHEDULE_NOT_FOUND");
+      }
+      if (schedule.sourceType !== 'estimate' || schedule.estimateId !== estimateId) {
+        throw new Error("SCHEDULE_SOURCE_MISMATCH");
+      }
+
+      // Get positions from estimate
+      let allPositions =
+        positionIds && positionIds.length > 0
+          ? await tx
+              .select()
+              .from(estimatePositions)
+              .where(and(
+                eq(estimatePositions.estimateId, estimateId),
+                inArray(estimatePositions.id, positionIds)
+              ))
+              .orderBy(estimatePositions.orderIndex)
+          : await tx
+              .select()
+              .from(estimatePositions)
+              .where(eq(estimatePositions.estimateId, estimateId))
+              .orderBy(estimatePositions.orderIndex);
+
+      // Filter: only create tasks for "main" positions (ГЭСН/ФЕР/ТЕР)
+      const mainPositions = allPositions.filter(p => isMainEstimatePosition(p));
+
+      // Get existing tasks (idempotency)
+      const existingTasks = await tx
+        .select({ estimatePositionId: scheduleTasks.estimatePositionId, orderIndex: scheduleTasks.orderIndex })
+        .from(scheduleTasks)
+        .where(eq(scheduleTasks.scheduleId, scheduleId));
+
+      const existingPositionIds = new Set(
+        existingTasks.map(t => t.estimatePositionId).filter((id): id is number => id != null)
+      );
+      const maxOrderIndex =
+        existingTasks.length === 0
+          ? -1
+          : Math.max(...existingTasks.map(t => Number(t.orderIndex ?? 0)));
+
+      let nextOrderIndex = maxOrderIndex + 1;
+      let created = 0;
+      let skipped = 0;
+
+      for (const pos of mainPositions) {
+        if (existingPositionIds.has(pos.id)) {
+          skipped++;
+          continue;
+        }
+
+        await tx.insert(scheduleTasks).values({
+          scheduleId,
+          workId: null,
+          estimatePositionId: pos.id,
+          titleOverride: null,
+          startDate: defaultStartDate,
+          durationDays: defaultDurationDays,
+          orderIndex: nextOrderIndex++,
+        });
+        created++;
+        existingPositionIds.add(pos.id);
+      }
+
+      return { scheduleId, created, skipped };
+    });
+  }
+
+  async getEstimatePositionsByIds(ids: number[]): Promise<EstimatePosition[]> {
+    if (ids.length === 0) return [];
+    return await db
+      .select()
+      .from(estimatePositions)
+      .where(inArray(estimatePositions.id, ids));
   }
 }
 

@@ -48,6 +48,7 @@ flowchart LR
     DB --> ADA[act_document_attachments]
     DB --> S[schedules (gantt)]
     DB --> ST[schedule_tasks (gantt)]
+    DB --> EPML[estimate_position_material_links]
     DB --> O[objects (construction objects)]
     DB --> OP[object_parties]
     DB --> ORP[object_responsible_persons]
@@ -98,6 +99,7 @@ flowchart LR
 - `attachments`: вложения к актам (url/name/type).
 - `schedules`: графики работ (контейнеры диаграммы Ганта; в MVP обычно используется дефолтный).
 - `schedule_tasks`: задачи графика (полосы Ганта), привязанные к `works` и содержащие `startDate`/`durationDays`/`orderIndex` и номер принадлежности к акту `actNumber`.
+- `estimate_position_material_links`: привязка подстроки сметы (`estimate_positions`, вспомогательные строки) к материалу проекта (`project_materials`) для вычисления статуса документов качества в графике работ.
 
 Дополнительно (задел под AI-чат):
 - `conversations` и chat-`messages` (см. `shared/schema.ts` + `server/replit_integrations/chat/*`).
@@ -124,9 +126,13 @@ flowchart LR
   - `POST /api/schedules/:id/bootstrap-from-works` — создать задачи из ВОР
   - `POST /api/schedules/:id/bootstrap-from-estimate` — создать задачи из позиций сметы
   - `POST /api/schedules/:id/generate-acts` — сформировать/обновить акты из графика
+  - `GET /api/schedules/:id/estimate-subrows/statuses` — статусы документов качества для подстрок сметы (MVP)
   - `GET /api/schedules/:id/source-info` — информация об источнике графика
   - `POST /api/schedules/:id/change-source` — сменить источник графика (ВОР ↔ Смета)
 - **Schedule Tasks**: `PATCH /api/schedule-tasks/:id`
+- **Estimate subrow links (MVP)**:
+  - `POST /api/estimate-position-links` — создать/обновить привязку подстроки сметы к материалу проекта
+  - `DELETE /api/estimate-position-links/:estimatePositionId` — удалить привязку
 
 Дополнительно:
 - `POST /api/messages/:id/process` — принудительная повторная обработка (нормализация) сообщения по его `id` (реализовано в `server/routes.ts`).

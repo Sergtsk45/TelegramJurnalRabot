@@ -53,6 +53,7 @@ export function MaterialWizard(props: { objectId: number; open: boolean; onOpenC
 
   // step 4
   const [addDoc, setAddDoc] = useState(false);
+  const [docBindTarget, setDocBindTarget] = useState<"material" | "batch">("material");
   const [doc, setDoc] = useState<DocDraft>({
     docType: "certificate",
     scope: "project",
@@ -84,6 +85,7 @@ export function MaterialWizard(props: { objectId: number; open: boolean; onOpenC
     setAddBatch(false);
     setBatch({});
     setAddDoc(false);
+    setDocBindTarget("material");
     setDoc({ docType: "certificate", scope: "project", useInActs: true });
   };
 
@@ -99,6 +101,7 @@ export function MaterialWizard(props: { objectId: number; open: boolean; onOpenC
       } as any);
 
       const projectMaterialId = Number((material as any).id);
+      let createdBatchId: number | null = null;
 
       if (addBatch) {
         const url = buildUrl(api.materialBatches.create.path, { id: projectMaterialId });
@@ -121,7 +124,8 @@ export function MaterialWizard(props: { objectId: number; open: boolean; onOpenC
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.message || "Failed to create batch");
         }
-        api.materialBatches.create.responses[201].parse(await res.json());
+        const createdBatch = api.materialBatches.create.responses[201].parse(await res.json());
+        createdBatchId = Number((createdBatch as any).id);
       }
 
       if (addDoc) {
@@ -147,11 +151,14 @@ export function MaterialWizard(props: { objectId: number; open: boolean; onOpenC
                 ? "scheme"
                 : "quality";
 
+        const batchIdForBinding =
+          addBatch && docBindTarget === "batch" ? createdBatchId : null;
+
         await createBinding.mutateAsync({
           documentId: (createdDoc as any).id,
           projectMaterialId,
           objectId: null,
-          batchId: null,
+          batchId: batchIdForBinding,
           bindingRole,
           useInActs: bindingRole === "quality" ? doc.useInActs : false,
           isPrimary: false,
@@ -279,6 +286,28 @@ export function MaterialWizard(props: { objectId: number; open: boolean; onOpenC
 
             {addDoc ? (
               <div className="grid gap-4">
+                {addBatch ? (
+                  <div className="grid gap-2">
+                    <Label>Привязать документ</Label>
+                    <RadioGroup value={docBindTarget} onValueChange={(v) => setDocBindTarget(v as any)} className="grid gap-2">
+                      <Label className="flex items-center gap-3 rounded-lg border p-3">
+                        <RadioGroupItem value="material" />
+                        <div>
+                          <div className="font-medium">К материалу</div>
+                          <div className="text-xs text-muted-foreground">Будет действовать для всех партий</div>
+                        </div>
+                      </Label>
+                      <Label className="flex items-center gap-3 rounded-lg border p-3">
+                        <RadioGroupItem value="batch" />
+                        <div>
+                          <div className="font-medium">К добавленной партии</div>
+                          <div className="text-xs text-muted-foreground">Только для этой поставки</div>
+                        </div>
+                      </Label>
+                    </RadioGroup>
+                  </div>
+                ) : null}
+
                 <div className="grid gap-2">
                   <Label>Тип</Label>
                   <Select value={doc.docType} onValueChange={(v) => setDoc((p) => ({ ...p, docType: v as any, useInActs: v !== "passport" }))}>

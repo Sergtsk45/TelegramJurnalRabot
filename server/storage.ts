@@ -7,6 +7,7 @@ import {
   estimates,
   estimateSections,
   estimatePositions,
+  estimatePositionMaterialLinks,
   positionResources,
   messages,
   acts,
@@ -34,6 +35,8 @@ import {
   type Estimate,
   type EstimateSection,
   type EstimatePosition,
+  type EstimatePositionMaterialLink,
+  type InsertEstimatePositionMaterialLink,
   type PositionResource,
   type Message,
   type Act,
@@ -279,6 +282,28 @@ export interface IStorage {
   
   // Estimate positions
   getEstimatePositionsByIds(ids: number[]): Promise<EstimatePosition[]>;
+
+  // Estimate subrows ↔ project materials (quality statuses on /schedule)
+  listEstimatePositionMaterialLinks(objectId: number, estimateId: number): Promise<EstimatePositionMaterialLink[]>;
+  upsertEstimatePositionMaterialLink(
+    objectId: number,
+    data: Omit<InsertEstimatePositionMaterialLink, "objectId">
+  ): Promise<EstimatePositionMaterialLink>;
+  deleteEstimatePositionMaterialLink(objectId: number, estimatePositionId: number): Promise<boolean>;
+  getEstimateSubrowStatuses(params: {
+    objectId: number;
+    estimateId: number;
+  }): Promise<
+    Record<
+      number,
+      {
+        status: "none" | "partial" | "ok";
+        reason?: string;
+        projectMaterialId?: number;
+        batchId?: number | null;
+      }
+    >
+  >;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1168,6 +1193,17 @@ export class DatabaseStorage implements IStorage {
       const [existing] = await tx.select({ id: estimates.id }).from(estimates).where(eq(estimates.id, id));
       if (!existing) return false;
 
+      // Prevent deleting an estimate that is used as a schedule source.
+      // Otherwise FK ON DELETE SET NULL will violate CHECK constraint:
+      // schedules.source_type='estimate' => schedules.estimate_id must be NOT NULL.
+      const schedulesUsing = await tx
+        .select({ id: schedules.id, sourceType: schedules.sourceType })
+        .from(schedules)
+        .where(eq(schedules.estimateId, id));
+      if (schedulesUsing.length > 0) {
+        throw new Error("ESTIMATE_IN_USE_BY_SCHEDULE");
+      }
+
       const positions = await tx
         .select({ id: estimatePositions.id })
         .from(estimatePositions)
@@ -1615,6 +1651,148 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(estimatePositions)
       .where(inArray(estimatePositions.id, ids));
+  }
+
+  // === Estimate subrows ↔ project materials (quality statuses on /schedule) ===
+
+  async listEstimatePositionMaterialLinks(objectId: number, estimateId: number): Promise<EstimatePositionMaterialLink[]> {
+    return (await db
+      .select()
+      .from(estimatePositionMaterialLinks)
+      .where(and(eq(estimatePositionMaterialLinks.objectId, objectId), eq(estimatePositionMaterialLinks.estimateId, estimateId)))
+      .orderBy(desc(estimatePositionMaterialLinks.updatedAt))) as any;
+  }
+
+  async upsertEstimatePositionMaterialLink(
+    objectId: number,
+    data: Omit<InsertEstimatePositionMaterialLink, "objectId">
+  ): Promise<EstimatePositionMaterialLink> {
+    const values: InsertEstimatePositionMaterialLink = {
+      ...(data as any),
+      objectId,
+      source: (data as any).source ?? "manual",
+    };
+
+    const [saved] = await db
+      .insert(estimatePositionMaterialLinks)
+      .values(values as any)
+      .onConflictDoUpdate({
+        target: [estimatePositionMaterialLinks.objectId, estimatePositionMaterialLinks.estimatePositionId],
+        set: {
+          estimateId: (values as any).estimateId,
+          projectMaterialId: (values as any).projectMaterialId,
+          batchId: (values as any).batchId ?? null,
+          source: (values as any).source ?? "manual",
+        } as any,
+      })
+      .returning();
+
+    return saved as any;
+  }
+
+  async deleteEstimatePositionMaterialLink(objectId: number, estimatePositionId: number): Promise<boolean> {
+    const [existing] = await db
+      .select({ id: estimatePositionMaterialLinks.id })
+      .from(estimatePositionMaterialLinks)
+      .where(
+        and(
+          eq(estimatePositionMaterialLinks.objectId, objectId),
+          eq(estimatePositionMaterialLinks.estimatePositionId, estimatePositionId)
+        )
+      );
+    if (!existing) return false;
+
+    await db
+      .delete(estimatePositionMaterialLinks)
+      .where(
+        and(
+          eq(estimatePositionMaterialLinks.objectId, objectId),
+          eq(estimatePositionMaterialLinks.estimatePositionId, estimatePositionId)
+        )
+      );
+    return true;
+  }
+
+  async getEstimateSubrowStatuses(params: { objectId: number; estimateId: number }): Promise<
+    Record<number, { status: "none" | "partial" | "ok"; reason?: string; projectMaterialId?: number; batchId?: number | null }>
+  > {
+    const { objectId, estimateId } = params;
+
+    // We return statuses keyed by estimatePositionId.
+    // For MVP we compute for all positions within an estimate and let UI pick subrows.
+    const allPositions = await db
+      .select({ id: estimatePositions.id })
+      .from(estimatePositions)
+      .where(eq(estimatePositions.estimateId, estimateId));
+    const allIds = allPositions.map((p) => Number(p.id));
+
+    // Compute aggregated doc stats per linked estimatePositionId (batched).
+    const rows = await db
+      .select({
+        estimatePositionId: estimatePositionMaterialLinks.estimatePositionId,
+        projectMaterialId: estimatePositionMaterialLinks.projectMaterialId,
+        batchId: estimatePositionMaterialLinks.batchId,
+        // IMPORTANT: COUNT() is bigint in Postgres and may be returned as string by driver.
+        // Cast to int to keep numbers stable for API/logic.
+        qualityDocsTotal: sql<number>`COALESCE(COUNT(DISTINCT CASE WHEN ${documentBindings.bindingRole}='quality' THEN ${documentBindings.id} END)::int, 0)`,
+        qualityDocsUseInActs: sql<number>`COALESCE(COUNT(DISTINCT CASE WHEN ${documentBindings.bindingRole}='quality' AND ${documentBindings.useInActs}=TRUE THEN ${documentBindings.id} END)::int, 0)`,
+        qualityDocsValid: sql<number>`COALESCE(COUNT(DISTINCT CASE WHEN ${documentBindings.bindingRole}='quality' AND (${documents.validTo} IS NULL OR ${documents.validTo} >= CURRENT_DATE) THEN ${documentBindings.id} END)::int, 0)`,
+        qualityDocsValidUseInActs: sql<number>`COALESCE(COUNT(DISTINCT CASE WHEN ${documentBindings.bindingRole}='quality' AND ${documentBindings.useInActs}=TRUE AND (${documents.validTo} IS NULL OR ${documents.validTo} >= CURRENT_DATE) THEN ${documentBindings.id} END)::int, 0)`,
+      })
+      .from(estimatePositionMaterialLinks)
+      .leftJoin(documentBindings, eq(documentBindings.projectMaterialId, estimatePositionMaterialLinks.projectMaterialId))
+      .leftJoin(documents, and(eq(documents.id, documentBindings.documentId), isNull(documents.deletedAt)))
+      .where(and(eq(estimatePositionMaterialLinks.objectId, objectId), eq(estimatePositionMaterialLinks.estimateId, estimateId)))
+      .groupBy(
+        estimatePositionMaterialLinks.estimatePositionId,
+        estimatePositionMaterialLinks.projectMaterialId,
+        estimatePositionMaterialLinks.batchId
+      );
+
+    const linkByEstimatePositionId = new Map<number, typeof rows[number]>();
+    for (const r of rows as any[]) {
+      linkByEstimatePositionId.set(Number(r.estimatePositionId), r as any);
+    }
+
+    const result: Record<number, { status: "none" | "partial" | "ok"; reason?: string; projectMaterialId?: number; batchId?: number | null }> = {};
+
+    for (const id of allIds) {
+      const r = linkByEstimatePositionId.get(id);
+      if (!r) {
+        result[id] = { status: "none", reason: "Не привязан материал" };
+        continue;
+      }
+
+      const total = Number((r as any).qualityDocsTotal ?? 0);
+      const useInActs = Number((r as any).qualityDocsUseInActs ?? 0);
+      const valid = Number((r as any).qualityDocsValid ?? 0);
+      const validUseInActs = Number((r as any).qualityDocsValidUseInActs ?? 0);
+
+      const projectMaterialId = Number((r as any).projectMaterialId);
+      const batchId = (r as any).batchId == null ? null : Number((r as any).batchId);
+
+      if (total === 0) {
+        result[id] = { status: "none", reason: "Нет документов качества", projectMaterialId, batchId };
+        continue;
+      }
+
+      if (validUseInActs > 0) {
+        result[id] = { status: "ok", projectMaterialId, batchId };
+        continue;
+      }
+
+      // Documents exist, but not a valid one usable in acts.
+      let reason = "Документы качества есть, но нет валидных для актов";
+      if (valid === 0) {
+        reason = "Документы качества есть, но все просрочены";
+      } else if (useInActs === 0) {
+        reason = "Документы качества есть, но они выключены для актов";
+      }
+
+      result[id] = { status: "partial", reason, projectMaterialId, batchId };
+    }
+
+    return result;
   }
 }
 

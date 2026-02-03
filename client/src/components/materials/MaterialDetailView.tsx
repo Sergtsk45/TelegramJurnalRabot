@@ -28,6 +28,7 @@ type BatchModel = {
 type BindingModel = {
   id: number;
   documentId: number;
+  batchId?: number | null;
   bindingRole: string;
   useInActs: boolean;
   isPrimary: boolean;
@@ -43,13 +44,22 @@ export function MaterialDetailView(props: {
   onPatchBinding?: (bindingId: number, patch: Partial<Pick<BindingModel, "useInActs" | "isPrimary" | "bindingRole">>) => void;
   onAddBatch?: () => void;
   onBindDocument?: () => void;
+  onBindDocumentToBatch?: (batchId: number) => void;
 }) {
-  const bindingsByDocId = new Map<number, BindingModel[]>();
-  for (const b of props.bindings) {
-    const list = bindingsByDocId.get(b.documentId) ?? [];
-    list.push(b);
-    bindingsByDocId.set(b.documentId, list);
-  }
+  const docById = new Map<number, DocumentCardModel>();
+  for (const d of props.documents) docById.set(d.id, d);
+
+  const batchById = new Map<number, BatchModel>();
+  for (const b of props.batches) batchById.set(b.id, b);
+
+  const formatBatchLabel = (batchId: number) => {
+    const b = batchById.get(batchId);
+    if (!b) return `Партия #${batchId}`;
+    const head = b.batchNumber ? `Партия №${b.batchNumber}` : `Партия #${b.id}`;
+    const date = b.deliveryDate ? formatIsoToDmy(b.deliveryDate) ?? b.deliveryDate : null;
+    const supplier = b.supplierName ? b.supplierName : null;
+    return [head, date, supplier].filter(Boolean).join(" • ");
+  };
 
   const hasUseInActsQualityDoc = props.bindings.some((b) => b.bindingRole === "quality" && b.useInActs);
 
@@ -118,6 +128,19 @@ export function MaterialDetailView(props: {
                       {b.supplierName ? ` • ${b.supplierName}` : ""}
                     </div>
                     {b.notes ? <div className="mt-2 text-sm">{b.notes}</div> : null}
+                    {props.onBindDocumentToBatch ? (
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={() => props.onBindDocumentToBatch?.(b.id)}
+                        >
+                          Привязать документ
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -134,31 +157,35 @@ export function MaterialDetailView(props: {
         </AccordionItem>
 
         <AccordionItem value="documents">
-          <AccordionTrigger>Документы ({props.documents.length})</AccordionTrigger>
+          <AccordionTrigger>Документы ({props.bindings.length})</AccordionTrigger>
           <AccordionContent>
-            {props.documents.length === 0 ? (
+            {props.bindings.length === 0 ? (
               <div className="text-sm text-muted-foreground">Документы не привязаны.</div>
             ) : (
               <div className="grid gap-3">
-                {props.documents.map((d) => {
-                  const bindings = bindingsByDocId.get(d.id) ?? [];
-                  const primary = bindings.find((b) => b.isPrimary);
-                  const useInActs = bindings.some((b) => b.bindingRole === "quality" && b.useInActs);
-
+                {props.bindings.map((binding) => {
+                  const d = docById.get(binding.documentId);
+                  if (!d) return null;
+                  const scopeLabel = binding.batchId == null ? "На все партии" : formatBatchLabel(Number(binding.batchId));
+                  const showUseInActs = binding.bindingRole === "quality";
                   return (
                     <DocumentCard
-                      key={d.id}
+                      key={binding.id}
                       doc={d}
                       rightSlot={
-                        bindings.length > 0 ? (
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="whitespace-nowrap">
+                            {scopeLabel}
+                          </Badge>
+
+                          {showUseInActs ? (
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2">
                               <Checkbox
-                                checked={useInActs}
+                                checked={Boolean(binding.useInActs)}
                                 onCheckedChange={(checked) => {
-                                  const b = bindings.find((x) => x.bindingRole === "quality");
-                                  if (!b || !props.onPatchBinding) return;
-                                  props.onPatchBinding(b.id, { useInActs: Boolean(checked) });
+                                  if (!props.onPatchBinding) return;
+                                  props.onPatchBinding(binding.id, { useInActs: Boolean(checked) });
                                 }}
                               />
                               <div className="text-xs text-muted-foreground whitespace-nowrap">В актах</div>
@@ -166,20 +193,32 @@ export function MaterialDetailView(props: {
 
                             <Button
                               type="button"
-                              variant={primary ? "default" : "outline"}
+                              variant={binding.isPrimary ? "default" : "outline"}
                               size="sm"
                               onClick={() => {
                                 if (!props.onPatchBinding) return;
-                                const b = bindings[0];
-                                if (!b) return;
-                                props.onPatchBinding(b.id, { isPrimary: true });
+                                props.onPatchBinding(binding.id, { isPrimary: true });
                               }}
                               title="Сделать основным"
                             >
                               <Star className="h-4 w-4" />
                             </Button>
                           </div>
-                        ) : null
+                          ) : (
+                            <Button
+                              type="button"
+                              variant={binding.isPrimary ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                if (!props.onPatchBinding) return;
+                                props.onPatchBinding(binding.id, { isPrimary: true });
+                              }}
+                              title="Сделать основным"
+                            >
+                              <Star className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       }
                       onOpen={d.fileUrl ? () => window.open(d.fileUrl || undefined, "_blank") : undefined}
                     />

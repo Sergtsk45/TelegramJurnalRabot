@@ -504,6 +504,12 @@ export async function registerRoutes(
       if (!ok) return res.status(404).json({ message: "Not found" });
       return res.status(204).send();
     } catch (err) {
+      if (err instanceof Error && err.message === "ESTIMATE_IN_USE_BY_SCHEDULE") {
+        return res.status(409).json({
+          message:
+            "Нельзя удалить смету: она используется как источник графика работ. Сначала смените источник графика (на ВОР) или очистите/пересоздайте задачи графика.",
+        });
+      }
       console.error("Delete estimate failed:", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
@@ -1065,6 +1071,77 @@ export async function registerRoutes(
         return res.status(400).json({ message: err.errors[0].message });
       }
       console.error("Schedule task patch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Schedule (estimate source): quality document statuses for estimate subrows (aux positions)
+  app.get(api.estimatePositionLinks.statuses.path, async (req, res) => {
+    try {
+      const scheduleId = Number(req.params.id);
+      if (!Number.isFinite(scheduleId) || scheduleId <= 0) {
+        return res.status(400).json({ message: "Invalid schedule id" });
+      }
+
+      const schedule = await storage.getScheduleWithTasks(scheduleId);
+      if (!schedule) {
+        return res.status(404).json({ message: "Schedule not found" });
+      }
+
+      if (schedule.sourceType !== "estimate" || !schedule.estimateId) {
+        return res.status(400).json({ message: 'Schedule source type must be "estimate"' });
+      }
+
+      const obj = await storage.getOrCreateDefaultObject();
+      const statuses = await storage.getEstimateSubrowStatuses({
+        objectId: obj.id,
+        estimateId: Number(schedule.estimateId),
+      });
+
+      return res.status(200).json({ byEstimatePositionId: statuses });
+    } catch (err) {
+      console.error("Get estimate subrow statuses failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Upsert estimate subrow ↔ project material link
+  app.post(api.estimatePositionLinks.upsert.path, async (req, res) => {
+    try {
+      const input = api.estimatePositionLinks.upsert.input.parse(req.body);
+      const obj = await storage.getOrCreateDefaultObject();
+
+      const saved = await storage.upsertEstimatePositionMaterialLink(obj.id, {
+        estimateId: input.estimateId,
+        estimatePositionId: input.estimatePositionId,
+        projectMaterialId: input.projectMaterialId,
+        batchId: (input as any).batchId ?? null,
+        source: "manual",
+      } as any);
+
+      return res.status(200).json(saved);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Upsert estimate position link failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Delete estimate subrow ↔ project material link
+  app.delete(api.estimatePositionLinks.delete.path, async (req, res) => {
+    const estimatePositionId = Number(req.params.estimatePositionId);
+    if (!Number.isFinite(estimatePositionId) || estimatePositionId <= 0) {
+      return res.status(400).json({ message: "Invalid estimatePositionId" });
+    }
+    try {
+      const obj = await storage.getOrCreateDefaultObject();
+      const ok = await storage.deleteEstimatePositionMaterialLink(obj.id, estimatePositionId);
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      return res.status(204).send();
+    } catch (err) {
+      console.error("Delete estimate position link failed:", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   });

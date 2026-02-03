@@ -491,6 +491,35 @@ export const scheduleTasks = pgTable(
   })
 );
 
+export const estimatePositionMaterialLinks = pgTable(
+  "estimate_position_material_links",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    objectId: integer("object_id")
+      .notNull()
+      .references(() => objects.id, { onDelete: "restrict" }),
+    estimateId: integer("estimate_id")
+      .notNull()
+      .references(() => estimates.id, { onDelete: "cascade" }),
+    estimatePositionId: integer("estimate_position_id")
+      .notNull()
+      .references(() => estimatePositions.id, { onDelete: "cascade" }),
+    projectMaterialId: bigint("project_material_id", { mode: "number" })
+      .notNull()
+      .references(() => projectMaterials.id, { onDelete: "cascade" }),
+    batchId: bigint("batch_id", { mode: "number" }).references(() => materialBatches.id, { onDelete: "set null" }),
+    source: text("source").notNull().default("manual"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    objectEstimatePositionUq: uniqueIndex("estimate_position_material_links_object_position_uq").on(t.objectId, t.estimatePositionId),
+    objectEstimateIdIdx: index("estimate_position_material_links_object_estimate_id_idx").on(t.objectId, t.estimateId),
+    estimatePositionIdIdx: index("estimate_position_material_links_estimate_position_id_idx").on(t.estimatePositionId),
+    projectMaterialIdIdx: index("estimate_position_material_links_project_material_id_idx").on(t.projectMaterialId),
+  })
+);
+
 
 // === SCHEMAS ===
 
@@ -513,6 +542,10 @@ export const insertActTemplateSchema = createInsertSchema(actTemplates).omit({ i
 export const insertActTemplateSelectionSchema = createInsertSchema(actTemplateSelections).omit({ id: true, generatedAt: true });
 export const insertScheduleSchema = createInsertSchema(schedules).omit({ id: true, createdAt: true });
 export const insertScheduleTaskSchema = createInsertSchema(scheduleTasks).omit({ id: true, createdAt: true });
+export const insertEstimatePositionMaterialLinkSchema = createInsertSchema(estimatePositionMaterialLinks).omit({
+  createdAt: true,
+  updatedAt: true,
+});
 
 // Zod schema for ActWorkItem (explicit source validation)
 export const actWorkItemSchema = z.object({
@@ -587,6 +620,9 @@ export type InsertSchedule = z.infer<typeof insertScheduleSchema>;
 
 export type ScheduleTask = typeof scheduleTasks.$inferSelect;
 export type InsertScheduleTask = z.infer<typeof insertScheduleTaskSchema>;
+
+export type EstimatePositionMaterialLink = typeof estimatePositionMaterialLinks.$inferSelect;
+export type InsertEstimatePositionMaterialLink = z.infer<typeof insertEstimatePositionMaterialLinkSchema>;
 
 // Request/Response Types
 export type CreateMessageRequest = {

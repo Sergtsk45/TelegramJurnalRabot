@@ -26,6 +26,8 @@ import { useLocation } from "wouter";
 import { BatchForm, type BatchDraft } from "@/components/materials/BatchForm";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatIsoToDmy, normalizeDmyInput, parseDmyToIso } from "@/lib/dateFormat";
 
 type DocDraft = {
@@ -75,12 +77,30 @@ export default function SourceMaterialDetail(props: { params: { id: string } }) 
   const [bindTab, setBindTab] = useState<"registry" | "new">("registry");
   const [docSearch, setDocSearch] = useState("");
   const docsQuery = useDocuments({ query: docSearch });
+  const [bindDocPreselectedBatchId, setBindDocPreselectedBatchId] = useState<number | null>(null);
+  const [bindDocTarget, setBindDocTarget] = useState<"material" | "batch">("material");
+  const [bindDocSelectedBatchId, setBindDocSelectedBatchId] = useState<number | null>(null);
 
   const [newDoc, setNewDoc] = useState<DocDraft>({
     docType: "certificate",
     scope: "project",
     useInActs: true,
   });
+
+  const openBindDocDrawer = (opts?: { preselectedBatchId?: number | null }) => {
+    const pre = opts?.preselectedBatchId ?? null;
+    setBindTab("registry");
+    setDocSearch("");
+    setBindDocPreselectedBatchId(pre);
+    if (pre != null) {
+      setBindDocTarget("batch");
+      setBindDocSelectedBatchId(pre);
+    } else {
+      setBindDocTarget("material");
+      setBindDocSelectedBatchId(null);
+    }
+    setBindDocOpen(true);
+  };
   const [newDocDateText, setNewDocDateText] = useState<string>(formatIsoToDmy(newDoc.docDate) ?? "");
   const [newDocCalendarOpen, setNewDocCalendarOpen] = useState(false);
 
@@ -168,6 +188,7 @@ export default function SourceMaterialDetail(props: { params: { id: string } }) 
                 bindings={(data.bindings ?? []).map((b: any) => ({
                   id: Number(b.id),
                   documentId: Number(b.documentId),
+                  batchId: b.batchId == null ? null : Number(b.batchId),
                   bindingRole: String(b.bindingRole ?? "quality"),
                   useInActs: Boolean(b.useInActs),
                   isPrimary: Boolean(b.isPrimary),
@@ -191,9 +212,10 @@ export default function SourceMaterialDetail(props: { params: { id: string } }) 
                   setAddBatchOpen(true);
                 }}
                 onBindDocument={() => {
-                  setBindTab("registry");
-                  setDocSearch("");
-                  setBindDocOpen(true);
+                  openBindDocDrawer({ preselectedBatchId: null });
+                }}
+                onBindDocumentToBatch={(batchId) => {
+                  openBindDocDrawer({ preselectedBatchId: batchId });
                 }}
               />
             </div>
@@ -251,12 +273,95 @@ export default function SourceMaterialDetail(props: { params: { id: string } }) 
         </DrawerContent>
       </Drawer>
 
-      <Drawer open={bindDocOpen} onOpenChange={setBindDocOpen}>
+      <Drawer
+        open={bindDocOpen}
+        onOpenChange={(v) => {
+          setBindDocOpen(v);
+          if (!v) {
+            setBindDocPreselectedBatchId(null);
+            setBindDocTarget("material");
+            setBindDocSelectedBatchId(null);
+          }
+        }}
+      >
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader>
             <DrawerTitle>Привязать документ</DrawerTitle>
           </DrawerHeader>
           <div className="px-4 pb-4">
+            <div className="rounded-xl border p-3">
+              <div className="text-sm font-medium">К чему привязать</div>
+              <RadioGroup
+                value={bindDocTarget}
+                onValueChange={(v) => {
+                  const next = v as "material" | "batch";
+                  if (next === "material") {
+                    setBindDocTarget("material");
+                    setBindDocSelectedBatchId(null);
+                    return;
+                  }
+
+                  const batches = (data?.batches ?? []) as any[];
+                  if (batches.length === 0) {
+                    toast({
+                      title: "Нет партий",
+                      description: "Сначала добавьте партию, чтобы привязать документ к конкретной поставке.",
+                      variant: "destructive",
+                    });
+                    setBindDocTarget("material");
+                    setBindDocSelectedBatchId(null);
+                    return;
+                  }
+
+                  setBindDocTarget("batch");
+                  if (bindDocSelectedBatchId == null) {
+                    setBindDocSelectedBatchId(Number(batches[0]?.id ?? null));
+                  }
+                }}
+                className="mt-3 grid gap-2"
+              >
+                <Label className="flex items-center gap-2">
+                  <RadioGroupItem value="material" id="bind-target-material" />
+                  К материалу (всем партиям)
+                </Label>
+                <Label className="flex items-center gap-2">
+                  <RadioGroupItem
+                    value="batch"
+                    id="bind-target-batch"
+                    disabled={((data?.batches ?? []) as any[]).length === 0}
+                  />
+                  К партии
+                </Label>
+              </RadioGroup>
+
+              {bindDocTarget === "batch" ? (
+                <div className="mt-3 grid gap-2">
+                  <Label>Партия</Label>
+                  <Select
+                    value={bindDocSelectedBatchId != null ? String(bindDocSelectedBatchId) : ""}
+                    onValueChange={(v) => setBindDocSelectedBatchId(Number(v))}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Выберите партию" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {((data?.batches ?? []) as any[]).map((b: any) => {
+                        const head = b.batchNumber ? `Партия №${String(b.batchNumber)}` : `Партия #${String(b.id)}`;
+                        const date = b.deliveryDate ? (formatIsoToDmy(String(b.deliveryDate)) ?? String(b.deliveryDate)) : null;
+                        const supplier = b.supplierName ? String(b.supplierName) : null;
+                        const label = [head, date, supplier].filter(Boolean).join(" • ");
+                        return (
+                          <SelectItem key={String(b.id)} value={String(b.id)}>
+                            {label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+            </div>
+
             <Tabs value={bindTab} onValueChange={(v) => setBindTab(v as any)}>
               <TabsList className="w-full">
                 <TabsTrigger value="registry" className="flex-1">
@@ -296,13 +401,23 @@ export default function SourceMaterialDetail(props: { params: { id: string } }) 
                               disabled={createBinding.isPending}
                               onClick={async () => {
                                 try {
+                                  const batchIdForBinding =
+                                    bindDocTarget === "batch" ? bindDocSelectedBatchId : null;
+                                  if (bindDocTarget === "batch" && batchIdForBinding == null) {
+                                    toast({
+                                      title: "Выберите партию",
+                                      description: "Чтобы привязать документ к партии, выберите конкретную партию.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
                                   const docType = String(d.docType ?? "other") as DocDraft["docType"];
                                   const role = deriveBindingRole(docType);
                                   await createBinding.mutateAsync({
                                     documentId: Number(d.id),
                                     projectMaterialId: id,
                                     objectId: null,
-                                    batchId: null,
+                                    batchId: batchIdForBinding,
                                     bindingRole: role,
                                     useInActs: role === "quality" ? true : false,
                                     isPrimary: false,
@@ -429,6 +544,16 @@ export default function SourceMaterialDetail(props: { params: { id: string } }) 
                       disabled={createDocument.isPending || createBinding.isPending}
                       onClick={async () => {
                         try {
+                          const batchIdForBinding =
+                            bindDocTarget === "batch" ? bindDocSelectedBatchId : null;
+                          if (bindDocTarget === "batch" && batchIdForBinding == null) {
+                            toast({
+                              title: "Выберите партию",
+                              description: "Чтобы привязать документ к партии, выберите конкретную партию.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
                           const created = await createDocument.mutateAsync({
                             docType: newDoc.docType,
                             scope: newDoc.scope,
@@ -447,7 +572,7 @@ export default function SourceMaterialDetail(props: { params: { id: string } }) 
                             documentId: Number((created as any).id),
                             projectMaterialId: id,
                             objectId: null,
-                            batchId: null,
+                            batchId: batchIdForBinding,
                             bindingRole: role,
                             useInActs: role === "quality" ? Boolean(newDoc.useInActs) : false,
                             isPrimary: false,

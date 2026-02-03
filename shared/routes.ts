@@ -8,6 +8,7 @@ import {
   documentBindings,
   actMaterialUsages,
   actDocumentAttachments,
+  estimatePositionMaterialLinks,
   insertWorkSchema,
   insertEstimateSchema,
   insertEstimateSectionSchema,
@@ -72,6 +73,13 @@ export const sourceDataDtoSchema = z.object({
     rep_designer: personDtoSchema,
     rep_work_performer: personDtoSchema,
   }),
+});
+
+const estimateSubrowStatusSchema = z.object({
+  status: z.enum(["none", "partial", "ok"]),
+  reason: z.string().optional(),
+  projectMaterialId: z.number().int().positive().optional(),
+  batchId: z.number().int().positive().nullable().optional(),
 });
 
 export const api = {
@@ -542,6 +550,7 @@ export const api = {
       responses: {
         204: z.any(),
         404: z.object({ message: z.string() }),
+        409: z.object({ message: z.string() }),
       },
     },
   },
@@ -737,6 +746,43 @@ export const api = {
         .refine((v) => Object.keys(v).length > 0, { message: 'Empty patch' }),
       responses: {
         200: z.custom<typeof scheduleTasks.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+  },
+  estimatePositionLinks: {
+    statuses: {
+      method: "GET" as const,
+      path: "/api/schedules/:id/estimate-subrows/statuses",
+      responses: {
+        200: z.object({
+          byEstimatePositionId: z.record(z.string(), estimateSubrowStatusSchema),
+        }),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    upsert: {
+      method: "POST" as const,
+      path: "/api/estimate-position-links",
+      input: z.object({
+        estimateId: z.number().int().positive(),
+        estimatePositionId: z.number().int().positive(),
+        projectMaterialId: z.number().int().positive(),
+        batchId: z.number().int().positive().nullable().optional(),
+      }),
+      responses: {
+        200: z.custom<typeof estimatePositionMaterialLinks.$inferSelect>(),
+        201: z.custom<typeof estimatePositionMaterialLinks.$inferSelect>(),
+        400: z.object({ message: z.string() }),
+      },
+    },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/estimate-position-links/:estimatePositionId",
+      responses: {
+        204: z.any(),
         400: z.object({ message: z.string() }),
         404: z.object({ message: z.string() }),
       },

@@ -430,6 +430,17 @@ export const api = {
         200: z.array(z.custom<typeof works.$inferSelect>()),
       },
     },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/works",
+      // Optional query:
+      // - resetSchedule=1: if any schedules use works as their source, reset their tasks and clear worksData in affected acts,
+      //   then clear all works (BoQ).
+      responses: {
+        204: z.any(),
+        409: z.object({ message: z.string() }),
+      },
+    },
     create: {
       method: 'POST' as const,
       path: '/api/works',

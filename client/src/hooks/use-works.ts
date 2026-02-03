@@ -70,3 +70,32 @@ export function useImportWorks() {
     },
   });
 }
+
+export type ClearWorksInput = {
+  resetSchedule?: boolean;
+};
+
+export function useClearWorks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input?: ClearWorksInput) => {
+      const baseUrl = api.works.delete.path;
+      const url = input?.resetSchedule ? `${baseUrl}?resetSchedule=1` : baseUrl;
+      const res = await fetch(url, { method: api.works.delete.method, credentials: "include" });
+      if (!res.ok && res.status !== 204) {
+        const err = await res.json().catch(() => ({}));
+        const message = err.message || "Failed to clear works";
+        const error = new Error(message) as Error & { status?: number };
+        error.status = res.status;
+        throw error;
+      }
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.works.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.schedules.default.path] });
+      queryClient.invalidateQueries({ queryKey: [api.schedules.get.path] });
+      queryClient.invalidateQueries({ queryKey: [api.acts.list.path] });
+    },
+  });
+}

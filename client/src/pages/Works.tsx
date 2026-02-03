@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
-import { useWorks, useCreateWork, useImportWorks } from "@/hooks/use-works";
+import { useWorks, useCreateWork, useImportWorks, useClearWorks } from "@/hooks/use-works";
 import { useDeleteEstimate, useEstimate, useEstimates, useImportEstimate } from "@/hooks/use-estimates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ export default function Works() {
   const { data: works = [], isLoading } = useWorks();
   const createWork = useCreateWork();
   const importWorks = useImportWorks();
+  const clearWorks = useClearWorks();
   const estimatesQuery = useEstimates();
   const importEstimate = useImportEstimate();
   const deleteEstimate = useDeleteEstimate();
@@ -52,6 +53,7 @@ export default function Works() {
   const estimateQuery = useEstimate(selectedEstimateId);
   const [isDeleteEstimateDialogOpen, setIsDeleteEstimateDialogOpen] = useState(false);
   const [pendingDeleteEstimateId, setPendingDeleteEstimateId] = useState<number | null>(null);
+  const [isClearWorksDialogOpen, setIsClearWorksDialogOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     code: "",
@@ -361,7 +363,58 @@ export default function Works() {
                     />
                   </label>
                 </Button>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="rounded-xl h-11"
+                  disabled={clearWorks.isPending}
+                  onClick={() => setIsClearWorksDialogOpen(true)}
+                >
+                  {language === "ru" ? "Очистить ВОР" : "Clear BoQ"}
+                </Button>
               </div>
+
+              <AlertDialog open={isClearWorksDialogOpen} onOpenChange={setIsClearWorksDialogOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {language === "ru" ? "Очистить ВОР?" : "Clear BoQ?"}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {language === "ru"
+                        ? "Это удалит все позиции ВОР (справочник работ). Также будут удалены задачи графика работ, если график использует ВОР как источник, и очищены списки работ в затронутых актах. После этого вы сможете импортировать новый ВОР или выбрать другой источник на вкладке «График работ»."
+                        : "This will delete all BoQ items. It will also delete schedule tasks if the schedule uses BoQ as the source and clear work lists in affected acts. After that, you can import a new BoQ or select another source on the Schedule page."}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={clearWorks.isPending}>
+                      {language === "ru" ? "Отмена" : "Cancel"}
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={clearWorks.isPending}
+                      onClick={async () => {
+                        try {
+                          await clearWorks.mutateAsync({ resetSchedule: true });
+                          toast({
+                            title: language === "ru" ? "Готово" : "Done",
+                            description: language === "ru" ? "ВОР очищен" : "BoQ cleared",
+                          });
+                          setSearchTerm("");
+                        } catch (e) {
+                          toast({
+                            title: language === "ru" ? "Ошибка" : "Error",
+                            description: e instanceof Error ? e.message : String(e),
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    >
+                      {language === "ru" ? "Очистить и сбросить" : "Clear and reset"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </>
           ) : (
             <>
@@ -425,6 +478,9 @@ export default function Works() {
                     disabled={deleteEstimate.isPending}
                     onClick={async () => {
                       try {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'client/pages/Works.tsx:deleteEstimate',message:'click delete estimate (no reset)',data:{estimateId:selectedEstimateId},timestamp:Date.now()})}).catch(()=>{});
+                        // #endregion
                         await deleteEstimate.mutateAsync({ id: selectedEstimateId });
                         toast({
                           title: language === "ru" ? "Удалено" : "Deleted",
@@ -435,6 +491,9 @@ export default function Works() {
                       } catch (e) {
                         const status = (e as any)?.status;
                         if (status === 409) {
+                          // #region agent log
+                          fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'client/pages/Works.tsx:deleteEstimate',message:'received 409, opening reset dialog',data:{estimateId:selectedEstimateId},timestamp:Date.now()})}).catch(()=>{});
+                          // #endregion
                           setPendingDeleteEstimateId(selectedEstimateId);
                           setIsDeleteEstimateDialogOpen(true);
                           return;
@@ -478,6 +537,9 @@ export default function Works() {
                       onClick={async () => {
                         if (!pendingDeleteEstimateId) return;
                         try {
+                          // #region agent log
+                          fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'client/pages/Works.tsx:deleteEstimate',message:'confirm delete+reset',data:{estimateId:pendingDeleteEstimateId},timestamp:Date.now()})}).catch(()=>{});
+                          // #endregion
                           await deleteEstimate.mutateAsync({ id: pendingDeleteEstimateId, resetSchedule: true });
                           toast({
                             title: language === "ru" ? "Удалено" : "Deleted",

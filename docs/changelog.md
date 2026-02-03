@@ -86,6 +86,33 @@
 
 ---
 
+## [2026-02-03] - ВОР: очистка с предупреждением и сбросом графика/актов (вариант A)
+### Добавлено
+- UI `/works`: кнопка «Очистить ВОР» с предупреждением («Очистить и сбросить»)
+
+### Изменено
+- API: `DELETE /api/works?resetSchedule=1` — если график использует ВОР как источник, удаляет задачи графика и очищает списки работ в затронутых актах, затем очищает ВОР
+- `server/storage.ts`: `clearWorks({ resetScheduleIfInUse: true })` — безопасная очистка ВОР при использовании графиком
+- `shared/routes.ts`: добавлен контракт `api.works.delete` (опционально `resetSchedule=1`)
+- `client/src/hooks/use-works.ts`: добавлен хук `useClearWorks` + инвалидация кэша графиков и актов
+
+### Исправлено
+- Нет
+
+---
+
+## [2026-02-03] - Документы: исправление фильтров Select (Radix) на /source/documents
+### Добавлено
+- Нет
+
+### Изменено
+- `client/src/pages/SourceDocuments.tsx`: для пунктов «Все» в фильтрах использован безопасный `value="__all__"` (вместо пустой строки), чтобы избежать runtime-error overlay Radix Select
+
+### Исправлено
+- Ошибка `[plugin:runtime-error-plugin] A <Select.Item /> must have a value prop that is not an empty string` на странице документов качества
+
+---
+
 ## [2026-02-02] - График работ: статусы документов качества по подстрокам сметы (MVP)
 ### Добавлено
 - DB: миграция `migrations/0007_estimate_position_material_links.sql` — таблица `estimate_position_material_links` (привязка подстроки сметы → материал проекта)

@@ -181,7 +181,7 @@ export interface IStorage {
   createWork(work: InsertWork): Promise<Work>;
   getWorkByCode(code: string): Promise<Work | undefined>;
   getWorksByIds(ids: number[]): Promise<Work[]>;
-  clearWorks(): Promise<void>;
+  clearWorks(options?: { resetScheduleIfInUse?: boolean }): Promise<void>;
   importWorks(items: InsertWork[], mode: "merge" | "replace"): Promise<{ created: number; updated: number }>;
 
   // Estimates (Сметы / ЛСР)
@@ -964,8 +964,49 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(works).where(inArray(works.id, ids));
   }
 
-  async clearWorks(): Promise<void> {
-    await db.delete(works);
+  async clearWorks(options?: { resetScheduleIfInUse?: boolean }): Promise<void> {
+    await db.transaction(async (tx) => {
+      // If any schedules use "works" as the source, clearing works would leave the schedule source selected
+      // but with missing tasks and potentially inconsistent acts. Force explicit confirmation via option.
+      const schedulesUsingWorks = await tx
+        .select({ id: schedules.id })
+        .from(schedules)
+        .where(eq(schedules.sourceType, "works" as any));
+
+      if (schedulesUsingWorks.length > 0 && !options?.resetScheduleIfInUse) {
+        throw new Error("WORKS_IN_USE_BY_SCHEDULE");
+      }
+
+      if (schedulesUsingWorks.length > 0 && options?.resetScheduleIfInUse) {
+        for (const s of schedulesUsingWorks) {
+          const scheduleId = s.id;
+
+          // 1) Find affected acts via tasks
+          const tasks = await tx
+            .select({ actNumber: scheduleTasks.actNumber })
+            .from(scheduleTasks)
+            .where(eq(scheduleTasks.scheduleId, scheduleId));
+
+          const affectedActNumbers = Array.from(
+            new Set(tasks.map((t) => t.actNumber).filter((n): n is number => n != null))
+          );
+
+          // 2) Clear worksData in affected acts
+          if (affectedActNumbers.length > 0) {
+            await tx
+              .update(acts)
+              .set({ worksData: [] as any })
+              .where(inArray(acts.actNumber, affectedActNumbers));
+          }
+
+          // 3) Delete all tasks for this schedule
+          await tx.delete(scheduleTasks).where(eq(scheduleTasks.scheduleId, scheduleId));
+        }
+      }
+
+      // Finally, delete all works (ВОР справочник работ)
+      await tx.delete(works);
+    });
   }
 
   async importWorks(
@@ -1188,6 +1229,9 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEstimate(id: number, options?: { resetScheduleIfInUse?: boolean }): Promise<boolean> {
     return await db.transaction(async (tx) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'server/storage.ts:deleteEstimate',message:'enter',data:{id,resetScheduleIfInUse:!!options?.resetScheduleIfInUse},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const [existing] = await tx.select({ id: estimates.id }).from(estimates).where(eq(estimates.id, id));
       if (!existing) return false;
 
@@ -1206,6 +1250,9 @@ export class DatabaseStorage implements IStorage {
       // (same effect as changing source to "works": delete tasks and clear worksData in affected acts),
       // then proceed with deletion.
       if (schedulesUsing.length > 0 && options?.resetScheduleIfInUse) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'server/storage.ts:deleteEstimate',message:'reset schedules branch',data:{id,schedulesUsingCount:schedulesUsing.length},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         for (const s of schedulesUsing) {
           const scheduleId = s.id;
 
@@ -1235,6 +1282,10 @@ export class DatabaseStorage implements IStorage {
             .update(schedules)
             .set({ sourceType: "works" as any, estimateId: null })
             .where(eq(schedules.id, scheduleId));
+
+          // #region agent log
+          fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'server/storage.ts:deleteEstimate',message:'schedule reset done',data:{estimateId:id,scheduleId,affectedActs:affectedActNumbers.length,tasksCount:tasks.length},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
         }
       }
 

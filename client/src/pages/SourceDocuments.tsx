@@ -24,11 +24,15 @@ export default function SourceDocuments() {
   const createDoc = useCreateDocument();
 
   const [search, setSearch] = useState("");
-  const [docType, setDocType] = useState<string>("");
-  const [scope, setScope] = useState<string>("");
+  const [docType, setDocType] = useState<string>("__all__");
+  const [scope, setScope] = useState<string>("__all__");
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const docsQuery = useDocuments({ query: search, docType: docType || undefined, scope: scope || undefined });
+  const docsQuery = useDocuments({
+    query: search,
+    docType: docType === "__all__" ? undefined : docType,
+    scope: scope === "__all__" ? undefined : scope,
+  });
 
   const [form, setForm] = useState({
     docType: "certificate",
@@ -88,7 +92,7 @@ export default function SourceDocuments() {
                 <SelectValue placeholder="Тип" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Все</SelectItem>
+                <SelectItem value="__all__">Все</SelectItem>
                 <SelectItem value="certificate">certificate</SelectItem>
                 <SelectItem value="declaration">declaration</SelectItem>
                 <SelectItem value="passport">passport</SelectItem>
@@ -103,7 +107,7 @@ export default function SourceDocuments() {
                 <SelectValue placeholder="Scope" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Все</SelectItem>
+                <SelectItem value="__all__">Все</SelectItem>
                 <SelectItem value="project">project</SelectItem>
                 <SelectItem value="global">global</SelectItem>
               </SelectContent>

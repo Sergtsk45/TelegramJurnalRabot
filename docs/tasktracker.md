@@ -531,10 +531,34 @@
 - **Статус**: Завершена
 - **Описание**: Исключить возможность случайного удаления всей ВОР в production. `DELETE /api/works` должен быть недоступен в prod (или защищён отдельным флагом/ролью).
 - **Шаги выполнения**:
-  - [x] Ограничить `DELETE /api/works` на сервере (запрет в production)
+  - [x] Ограничить `DELETE /api/works` на сервере: в production доступен только при явном подтверждении через query `resetSchedule=1`
   - [x] Обновить `/docs/project.md` (описать ограничения)
   - [x] Обновить `/docs/changelog.md` по факту изменений
 - **Зависимости**: Нет
+
+---
+
+## Задача: ВОР — очистка с предупреждением и сбросом графика/актов (вариант A)
+- **Статус**: Завершена
+- **Описание**: Добавить возможность очищать ВОР (справочник работ) на вкладке `/works` с предупреждением пользователю. При подтверждении должны быть удалены задачи графика работ, если график использует ВОР как источник, и очищены списки работ в затронутых актах. Источник графика остаётся «ВОР», после чего пользователь может импортировать новый ВОР или выбрать другой источник на `/schedule`.
+- **Шаги выполнения**:
+  - [x] Backend: `DELETE /api/works?resetSchedule=1` — сбросить schedule_tasks и acts.worksData для графиков с `sourceType='works'`, затем очистить `works`
+  - [x] Backend: `DELETE /api/works` без `resetSchedule` — вернуть `409`, если ВОР используется графиком
+  - [x] Frontend: UI `/works` — кнопка «Очистить ВОР» с предупреждением и подтверждением
+  - [x] Frontend: `useClearWorks` — вызов с `resetSchedule=1` + инвалидация кэша (works/schedules/acts)
+  - [x] Документация: обновить `docs/changelog.md`, `docs/project.md`, `docs/tasktracker.md`
+- **Зависимости**: `server/storage.ts`, `server/routes.ts`, `shared/routes.ts`, `client/src/hooks/use-works.ts`, `client/src/pages/Works.tsx`
+
+---
+
+## Задача: Документы — исправить runtime ошибку Select на /source/documents
+- **Статус**: Завершена
+- **Описание**: На странице `/source/documents` в фильтрах использовался `SelectItem value=\"\"`, что запрещено Radix Select и вызывает runtime overlay. Нужно заменить на непустое значение и сохранить семантику «Все» (без фильтра).
+- **Шаги выполнения**:
+  - [x] Найти `SelectItem value=\"\"` в `client/src/pages/SourceDocuments.tsx`
+  - [x] Заменить на `value=\"__all__\"` и маппить `__all__ → undefined` при вызове `useDocuments`
+  - [x] Проверить TypeScript: `npm run check`
+- **Зависимости**: `client/src/pages/SourceDocuments.tsx`, `client/src/hooks/use-documents.ts`
 
 ---
 

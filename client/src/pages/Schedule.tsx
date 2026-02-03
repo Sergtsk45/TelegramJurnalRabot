@@ -118,6 +118,41 @@ export default function Schedule() {
     return code.startsWith("ГЭСН") || code.startsWith("ФЕР") || code.startsWith("ТЕР");
   };
 
+  const parseNumeric = (value: unknown): number | null => {
+    if (value == null) return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    const s = String(value).trim();
+    if (!s) return null;
+    // Support "123,45" and "1 234,56" formats
+    const normalized = s.replace(/\s+/g, "").replace(",", ".");
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const getLaborManHours = (position: any): number | null => {
+    const resources: any[] = position?.resources ?? [];
+    if (!Array.isArray(resources) || resources.length === 0) return null;
+
+    // Sum resource quantities for labor resources (ОТ + ОТМ)
+    const laborResources = resources.filter((r: any) => {
+      const type = String(r?.resourceType ?? "")
+        .toUpperCase()
+        .replace(/[()]/g, "")
+        .trim();
+      return type === "ОТ" || type === "ОТМ";
+    });
+
+    if (laborResources.length === 0) return null;
+
+    let total = 0;
+    for (const r of laborResources) {
+      const n = parseNumeric(r?.quantityTotal ?? r?.quantity);
+      if (n != null) total += n;
+    }
+
+    return total > 0 ? total : null;
+  };
+
   // Build flat list of all estimate positions (ordered)
   const allEstimatePositions = useMemo(() => {
     const list: any[] = [];
@@ -611,6 +646,33 @@ export default function Schedule() {
                                 </div>
                               ) : null}
                               <div className="text-sm font-medium truncate">{title}</div>
+                              {sourceType === "estimate" && p ? (
+                                <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                                  {(() => {
+                                    const parts: string[] = [];
+
+                                    const unit = String(p?.unit ?? "").trim();
+                                    if (unit) parts.push(`${language === "ru" ? "Ед." : "Unit"}: ${unit}`);
+
+                                    const qty = parseNumeric(p?.quantity);
+                                    if (qty != null) {
+                                      parts.push(
+                                        `${language === "ru" ? "Объём" : "Qty"}: ${qty.toLocaleString("ru-RU")}`
+                                      );
+                                    }
+
+                                    const labor = getLaborManHours(p);
+                                    if (labor != null) {
+                                      parts.push(
+                                        `${language === "ru" ? "Труд" : "Labor"}: ${labor.toLocaleString("ru-RU")} чел.-ч`
+                                      );
+                                    }
+
+                                    if (parts.length === 0) return null;
+                                    return parts.join(" | ");
+                                  })()}
+                                </div>
+                              ) : null}
                             </div>
                             <div className="flex items-center gap-1">
                               <Button

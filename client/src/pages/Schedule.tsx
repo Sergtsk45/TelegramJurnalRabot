@@ -133,8 +133,8 @@ export default function Schedule() {
     const resources: any[] = position?.resources ?? [];
     if (!Array.isArray(resources) || resources.length === 0) return null;
 
-    // Sum resource quantities for labor resources (ОТ + ОТМ)
-    const laborResources = resources.filter((r: any) => {
+    // Prefer explicit labor resource types (ОТ + ОТМ) if present
+    const laborByType = resources.filter((r: any) => {
       const type = String(r?.resourceType ?? "")
         .toUpperCase()
         .replace(/[()]/g, "")
@@ -142,7 +142,23 @@ export default function Schedule() {
       return type === "ОТ" || type === "ОТМ";
     });
 
-    if (laborResources.length === 0) return null;
+    let laborResources = laborByType;
+    let laborMode: "type" | "unit" = "type";
+
+    // Fallback: some estimate exports store labor without resourceType; then use unit "чел.-ч"
+    if (laborResources.length === 0) {
+      const laborByUnit = resources.filter((r: any) => {
+        const u = String(r?.unit ?? "").toLowerCase().replace(/\s+/g, "");
+        return u.includes("чел") && u.includes("ч");
+      });
+
+      if (laborByUnit.length > 0) {
+        laborResources = laborByUnit;
+        laborMode = "unit";
+      } else {
+        return null;
+      }
+    }
 
     let total = 0;
     for (const r of laborResources) {
@@ -574,8 +590,16 @@ export default function Schedule() {
               <CardContent className="p-0">
                 {/* Header */}
                 <div className="flex border-b bg-muted/20">
-                  <div className="w-72 shrink-0 px-3 py-2 text-xs font-medium text-muted-foreground">
-                    {t.taskColumn}
+                  <div className="w-[360px] shrink-0 flex">
+                    <div className="flex-1 px-3 py-2 text-xs font-medium text-muted-foreground">
+                      {t.taskColumn}
+                    </div>
+                    <div className="w-16 px-1 py-2 text-xs font-medium text-muted-foreground text-center border-l border-border/40">
+                      {language === "ru" ? "Объём" : "Qty"}
+                    </div>
+                    <div className="w-16 px-1 py-2 text-xs font-medium text-muted-foreground text-center border-l border-border/40">
+                      {language === "ru" ? "ТЗ" : "Labor"}
+                    </div>
                   </div>
                   <div className="flex-1 overflow-x-auto">
                     <div className="flex" style={{ width: timelineWidth }}>
@@ -598,7 +622,7 @@ export default function Schedule() {
 
                 {/* Body */}
                 <div className="flex">
-                  <div className="w-72 shrink-0 border-r">
+                  <div className="w-[360px] shrink-0 border-r">
                     {tasks.map((task) => {
                       const w = task.workId ? worksById.get(task.workId) : null;
                       const p = task.estimatePositionId ? estimatePositionsById.get(task.estimatePositionId) : null;
@@ -634,47 +658,52 @@ export default function Schedule() {
                             )}
 
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs text-muted-foreground font-mono truncate">
-                                {sourceType === "estimate"
-                                  ? (p?.lineNo || p?.code || `ID:${task.estimatePositionId ?? task.id}`)
-                                  : (w?.code || `ID:${task.workId ?? task.id}`)}
+                              {/* Row 1: Code + Act/Unit */}
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <div className="font-mono truncate">
+                                  {sourceType === "estimate"
+                                    ? (p?.lineNo || p?.code || `ID:${task.estimatePositionId ?? task.id}`)
+                                    : (w?.code || `ID:${task.workId ?? task.id}`)}
+                                </div>
+                                {(() => {
+                                  const unit = sourceType === "estimate" ? String(p?.unit ?? "").trim() : "";
+                                  const parts: string[] = [];
+                                  if (task.actNumber != null) {
+                                    parts.push(`${language === "ru" ? "Акт №" : "Act #"}${task.actNumber}`);
+                                  }
+                                  if (sourceType === "estimate" && unit) {
+                                    parts.push(`${language === "ru" ? "Ед." : "Unit"}: ${unit}`);
+                                  }
+                                  if (parts.length === 0) return null;
+                                  return (
+                                    <div className="text-[10px] shrink-0">
+                                      {parts.join(" | ")}
+                                    </div>
+                                  );
+                                })()}
                               </div>
-                              {task.actNumber != null ? (
-                                <div className="text-[10px] text-muted-foreground truncate">
-                                  {language === "ru" ? "Акт №" : "Act #"}
-                                  {task.actNumber}
-                                </div>
-                              ) : null}
+
+                              {/* Row 2: Title only */}
                               <div className="text-sm font-medium truncate">{title}</div>
-                              {sourceType === "estimate" && p ? (
-                                <div className="text-[10px] text-muted-foreground truncate mt-0.5">
-                                  {(() => {
-                                    const parts: string[] = [];
-
-                                    const unit = String(p?.unit ?? "").trim();
-                                    if (unit) parts.push(`${language === "ru" ? "Ед." : "Unit"}: ${unit}`);
-
-                                    const qty = parseNumeric(p?.quantity);
-                                    if (qty != null) {
-                                      parts.push(
-                                        `${language === "ru" ? "Объём" : "Qty"}: ${qty.toLocaleString("ru-RU")}`
-                                      );
-                                    }
-
-                                    const labor = getLaborManHours(p);
-                                    if (labor != null) {
-                                      parts.push(
-                                        `${language === "ru" ? "Труд" : "Labor"}: ${labor.toLocaleString("ru-RU")} чел.-ч`
-                                      );
-                                    }
-
-                                    if (parts.length === 0) return null;
-                                    return parts.join(" | ");
-                                  })()}
-                                </div>
-                              ) : null}
                             </div>
-                            <div className="flex items-center gap-1">
+
+                            {/* Quantity column */}
+                            <div className="w-16 shrink-0 text-xs text-muted-foreground text-right px-1 border-l border-border/40">
+                              {sourceType === "estimate" ? (() => {
+                                const qty = parseNumeric(p?.quantity);
+                                return qty != null ? qty.toLocaleString(language === "ru" ? "ru-RU" : "en-US") : "—";
+                              })() : "—"}
+                            </div>
+
+                            {/* Labor column */}
+                            <div className="w-16 shrink-0 text-xs text-muted-foreground text-right px-1 border-l border-border/40">
+                              {sourceType === "estimate" ? (() => {
+                                const labor = getLaborManHours(p);
+                                return labor != null ? labor.toLocaleString(language === "ru" ? "ru-RU" : "en-US") : "—";
+                              })() : "—"}
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
                               <Button
                                 variant="ghost"
                                 size="icon"

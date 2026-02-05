@@ -6,6 +6,15 @@ vite.config.ts.*
 *.tar.gz
 # Generated PDFs
 generated_pdfs/
+test-output-*.pdf
+# Local / temp
+tmp/
+*.log
+*Zone.Identifier
+# Attached assets: ignore binaries (keep only code/docs in GESN)
+attached_assets/**/*.pdf
+attached_assets/**/*.sqlite3
+attached_assets/**/*.xlsx
 # Cursor (ignore everything, but keep selected rules)
 .cursor/**
 !.cursor/rules/

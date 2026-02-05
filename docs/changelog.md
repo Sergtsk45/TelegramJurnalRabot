@@ -9,6 +9,7 @@
 - API:
   - `GET/PUT/POST/DELETE /api/schedule-tasks/:id/materials` — материалы задачи (для п.3 АОСР и приложений)
   - `POST /api/schedules/:id/generate-acts`: ответ расширен `warnings`, `deletedActNumbers`
+- Debug: инструментализация логов для диагностики ошибки `Failed to fetch` при импорте сметы (клиентский запрос и серверный обработчик)
 
 ### Изменено
 - `shared/schema.ts`: добавлены поля актов/задач и таблица `task_materials`
@@ -22,7 +23,7 @@
   - `client/src/pages/Acts.tsx`: добавлено отображение типа акта, экспорт PDF через диалог; создание актов по датам/шаблонам убрано из основного флоу
 
 ### Исправлено
-- Нет
+- Миграция `0010_act_from_schedule_task_data.sql`: удаление legacy-актов теперь сначала очищает зависимые записи `act_template_selections`, чтобы не падать по FK (`act_template_selections_act_id_acts_id_fk`)
 
 ---
 

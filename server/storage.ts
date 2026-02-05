@@ -1383,9 +1383,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEstimate(id: number, options?: { resetScheduleIfInUse?: boolean }): Promise<boolean> {
     return await db.transaction(async (tx) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'server/storage.ts:deleteEstimate',message:'enter',data:{id,resetScheduleIfInUse:!!options?.resetScheduleIfInUse},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       const [existing] = await tx.select({ id: estimates.id }).from(estimates).where(eq(estimates.id, id));
       if (!existing) return false;
 
@@ -1404,9 +1401,6 @@ export class DatabaseStorage implements IStorage {
       // (same effect as changing source to "works": delete tasks and clear worksData in affected acts),
       // then proceed with deletion.
       if (schedulesUsing.length > 0 && options?.resetScheduleIfInUse) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'server/storage.ts:deleteEstimate',message:'reset schedules branch',data:{id,schedulesUsingCount:schedulesUsing.length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         for (const s of schedulesUsing) {
           const scheduleId = s.id;
 
@@ -1436,10 +1430,6 @@ export class DatabaseStorage implements IStorage {
             .update(schedules)
             .set({ sourceType: "works" as any, estimateId: null })
             .where(eq(schedules.id, scheduleId));
-
-          // #region agent log
-          fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'server/storage.ts:deleteEstimate',message:'schedule reset done',data:{estimateId:id,scheduleId,affectedActs:affectedActNumbers.length,tasksCount:tasks.length},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
         }
       }
 

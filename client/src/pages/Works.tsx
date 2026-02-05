@@ -478,9 +478,6 @@ export default function Works() {
                     disabled={deleteEstimate.isPending}
                     onClick={async () => {
                       try {
-                        // #region agent log
-                        fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'client/pages/Works.tsx:deleteEstimate',message:'click delete estimate (no reset)',data:{estimateId:selectedEstimateId},timestamp:Date.now()})}).catch(()=>{});
-                        // #endregion
                         await deleteEstimate.mutateAsync({ id: selectedEstimateId });
                         toast({
                           title: language === "ru" ? "Удалено" : "Deleted",
@@ -491,9 +488,6 @@ export default function Works() {
                       } catch (e) {
                         const status = (e as any)?.status;
                         if (status === 409) {
-                          // #region agent log
-                          fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'client/pages/Works.tsx:deleteEstimate',message:'received 409, opening reset dialog',data:{estimateId:selectedEstimateId},timestamp:Date.now()})}).catch(()=>{});
-                          // #endregion
                           setPendingDeleteEstimateId(selectedEstimateId);
                           setIsDeleteEstimateDialogOpen(true);
                           return;
@@ -537,9 +531,6 @@ export default function Works() {
                       onClick={async () => {
                         if (!pendingDeleteEstimateId) return;
                         try {
-                          // #region agent log
-                          fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'client/pages/Works.tsx:deleteEstimate',message:'confirm delete+reset',data:{estimateId:pendingDeleteEstimateId},timestamp:Date.now()})}).catch(()=>{});
-                          // #endregion
                           await deleteEstimate.mutateAsync({ id: pendingDeleteEstimateId, resetSchedule: true });
                           toast({
                             title: language === "ru" ? "Удалено" : "Deleted",

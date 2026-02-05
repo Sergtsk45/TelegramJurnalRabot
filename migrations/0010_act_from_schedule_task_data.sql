@@ -80,6 +80,20 @@ WHERE a."id" = s."act_id"
 -- 4) Remove legacy acts not referenced by schedule_tasks
 -- ----
 
+-- Remove dependent legacy selections first to satisfy FK constraints
+DELETE FROM "act_template_selections"
+WHERE "act_id" IN (
+  SELECT a."id"
+  FROM "acts" a
+  WHERE
+    a."act_number" IS NULL
+    OR a."act_number" NOT IN (
+      SELECT DISTINCT "act_number"
+      FROM "schedule_tasks"
+      WHERE "act_number" IS NOT NULL
+    )
+);
+
 DELETE FROM "acts"
 WHERE
   "act_number" IS NULL

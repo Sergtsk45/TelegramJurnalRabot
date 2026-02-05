@@ -18,7 +18,9 @@ export function useEstimates() {
     queryKey: [api.estimates.list.path],
     queryFn: async () => {
       const res = await fetch(api.estimates.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch estimates");
+      if (!res.ok) {
+        throw new Error("Failed to fetch estimates");
+      }
       return api.estimates.list.responses[200].parse(await res.json());
     },
   });
@@ -44,15 +46,18 @@ export function useImportEstimate() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: unknown) => {
+      const method = api.estimates.import.method;
+      const body = JSON.stringify(payload);
+
       const res = await fetch(api.estimates.import.path, {
-        method: api.estimates.import.method,
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body,
         credentials: "include",
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to import estimate");
+        throw new Error((err as any).message || "Failed to import estimate");
       }
       return api.estimates.import.responses[200].parse(await res.json());
     },

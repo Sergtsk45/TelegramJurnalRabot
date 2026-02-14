@@ -504,29 +504,17 @@ export async function registerRoutes(
       resetScheduleRaw === "1" || resetScheduleRaw === "true";
 
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'server/routes.ts:DELETE /api/estimates/:id',message:'deleteEstimate request',data:{id,resetSchedule,resetScheduleRaw},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       const ok = await storage.deleteEstimate(id, { resetScheduleIfInUse: resetSchedule });
       if (!ok) return res.status(404).json({ message: "Not found" });
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'server/routes.ts:DELETE /api/estimates/:id',message:'deleteEstimate success',data:{id,resetSchedule},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return res.status(204).send();
     } catch (err) {
       if (err instanceof Error && err.message === "ESTIMATE_IN_USE_BY_SCHEDULE") {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'server/routes.ts:DELETE /api/estimates/:id',message:'deleteEstimate blocked ESTIMATE_IN_USE_BY_SCHEDULE',data:{id,resetSchedule},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return res.status(409).json({
           message:
             "Нельзя удалить смету: она используется как источник графика работ. Сначала смените источник графика (на ВОР) или очистите/пересоздайте задачи графика.",
         });
       }
       console.error("Delete estimate failed:", err);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/006992a0-d583-4f52-8106-6216dbee1025',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H3',location:'server/routes.ts:DELETE /api/estimates/:id',message:'deleteEstimate failed 500',data:{id,resetSchedule,errorMessage:err instanceof Error ? err.message : String(err)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return res.status(500).json({ message: "Internal Server Error" });
     }
   });

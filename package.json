@@ -8,6 +8,8 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
+    "test": "npm run test:smoke",
+    "test:smoke": "tsx --test tests/smoke/*.test.ts",
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx script/db-migrate.ts"
   },

@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
+import { isDestructiveActionAllowed } from "./destructiveGuard";
 import {
   buildActDataFromSourceData,
   buildAttachmentsText,
@@ -524,6 +525,9 @@ export async function registerRoutes(
     try {
       const input = api.works.import.input.parse(req.body);
       const mode = input.mode ?? "merge";
+      if (mode === "replace" && !isDestructiveActionAllowed()) {
+        return res.status(404).json({ message: "Not found" });
+      }
 
       // De-duplicate by code (last wins) and trim codes
       const map = new Map<string, (typeof input.items)[number]>();
@@ -555,8 +559,7 @@ export async function registerRoutes(
     const resetScheduleRaw = (req.query as any)?.resetSchedule;
     const resetSchedule = resetScheduleRaw === "1" || resetScheduleRaw === "true";
 
-    // Safety: keep destructive clear-works blocked in production unless explicitly confirmed via query flag.
-    if (process.env.NODE_ENV === "production" && !resetSchedule) {
+    if (!isDestructiveActionAllowed()) {
       return res.status(404).json({ message: "Not found" });
     }
 
@@ -1467,9 +1470,9 @@ async function seedDatabase() {
   }
 }
 
-// Run seed (dev-only, opt-in)
+// Run seed only when explicitly enabled and destructive actions are allowed.
 const enableDemoSeed =
-  process.env.NODE_ENV !== "production" &&
+  isDestructiveActionAllowed() &&
   String(process.env.ENABLE_DEMO_SEED || "").toLowerCase() === "true";
 
 if (enableDemoSeed) {

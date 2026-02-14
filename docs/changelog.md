@@ -5,19 +5,27 @@
 - `server/destructiveGuard.ts`: единый helper `isDestructiveActionAllowed()`:
   - в dev деструктивные операции разрешены,
   - в production требуют `ALLOW_DESTRUCTIVE_ACTIONS=true`.
+- Smoke-тесты:
+  - `tests/smoke/destructive-guard.test.ts`
+  - `tests/smoke/pdf-export.test.ts`
+- npm-скрипты для тестов:
+  - `npm run test`
+  - `npm run test:smoke`
 
 ### Изменено
 - `server/routes.ts`:
   - `POST /api/works/import` в режиме `mode=replace` теперь недоступен в production без `ALLOW_DESTRUCTIVE_ACTIONS=true`;
   - `DELETE /api/works` переведён на единый destructive guard;
   - demo-seed (`ENABLE_DEMO_SEED=true`) запускается только если деструктивные операции разрешены.
-- `docs/project.md`: актуализированы правила безопасности и переменные окружения (`ALLOW_DESTRUCTIVE_ACTIONS`, `ENABLE_DEMO_SEED`).
+- `tests/smoke/pdf-export.test.ts`: тест PDF генерации отвязан от внешнего окружения БД через локальную установку `DATABASE_URL` в рантайме теста.
+- `docs/project.md`: актуализированы правила безопасности, переменные окружения и тестовые команды (`ALLOW_DESTRUCTIVE_ACTIONS`, `ENABLE_DEMO_SEED`, `npm run test`).
 
 ### Исправлено
 - Удалены временные debug/agent telemetry-вставки с `fetch('http://127.0.0.1:7243/...')` из:
   - `server/routes.ts`
   - `server/storage.ts`
   - `client/src/pages/Works.tsx`
+- Подтверждено, что `npm run check` проходит без ошибок в актуальном окружении после установки зависимостей.
 
 ---
 

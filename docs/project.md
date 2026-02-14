@@ -164,6 +164,8 @@ flowchart LR
 - `npm run build` — сборка в `dist/`.
 - `npm run start` — запуск прод-сборки.
 - `npm run check` — TypeScript проверки.
+- `npm run test` — запуск smoke-тестов (guard + PDF экспорт).
+- `npm run test:smoke` — точечный запуск smoke-набора (`tests/smoke/*.test.ts`).
 - `npm run db:migrate` — применение SQL-миграций из `migrations/` (**единственный допустимый способ изменения БД**).
 
 **Не использовать:** `npm run db:push` — применение схемы Drizzle к БД. В проекте принят вариант B (SQL-миграции); `db:push` не синхронизирован с историей миграций и может привести к рассинхрону. См. `docs/db-migrations.md`.

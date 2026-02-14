@@ -1,5 +1,26 @@
 # Changelog
 
+## [2026-02-13] - Безопасность деструктивных операций: единый env-gate + удаление временной телеметрии
+### Добавлено
+- `server/destructiveGuard.ts`: единый helper `isDestructiveActionAllowed()`:
+  - в dev деструктивные операции разрешены,
+  - в production требуют `ALLOW_DESTRUCTIVE_ACTIONS=true`.
+
+### Изменено
+- `server/routes.ts`:
+  - `POST /api/works/import` в режиме `mode=replace` теперь недоступен в production без `ALLOW_DESTRUCTIVE_ACTIONS=true`;
+  - `DELETE /api/works` переведён на единый destructive guard;
+  - demo-seed (`ENABLE_DEMO_SEED=true`) запускается только если деструктивные операции разрешены.
+- `docs/project.md`: актуализированы правила безопасности и переменные окружения (`ALLOW_DESTRUCTIVE_ACTIONS`, `ENABLE_DEMO_SEED`).
+
+### Исправлено
+- Удалены временные debug/agent telemetry-вставки с `fetch('http://127.0.0.1:7243/...')` из:
+  - `server/routes.ts`
+  - `server/storage.ts`
+  - `client/src/pages/Works.tsx`
+
+---
+
 ## [2026-02-04] - График работ: двухстрочная левая часть (№/Акт/ед.изм + Объём/ТЗ) и перенос наименования
 ### Добавлено
 - Нет

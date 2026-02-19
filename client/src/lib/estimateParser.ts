@@ -72,8 +72,17 @@ function norm(v: unknown): string {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * Strip ГРАНД-Смета "individual price" marker appended to line numbers.
+ * ГРАНД-Смета writes "10\n*" (linebreak + asterisk) when a position has
+ * an individual (non-normative) price. We need the bare number.
+ */
+function normalizeLineNo(s: string): string {
+  return s.replace(/[\r\n]+\*\s*$/, "").trim();
+}
+
 function isLineNo(v: unknown): boolean {
-  const s = String(v ?? "").trim();
+  const s = normalizeLineNo(String(v ?? "").trim());
   return /^\d+(?:\.\d+)?$/.test(s);
 }
 
@@ -278,7 +287,7 @@ export function parseEstimateWorkbook(
 
     const nameStr = String(cellName ?? "").trim();
     const codeStr = String(cellCode ?? "").trim();
-    const noStr = String(cellNo ?? "").trim();
+    const noStr = normalizeLineNo(String(cellNo ?? "").trim());
     const nameNorm = norm(cellName);
 
     if (!nameStr && !codeStr && !noStr) continue;

@@ -1,18 +1,18 @@
 # Task Tracker
 
 ## Задача: Security hotfix — закрыть path traversal в `GET /api/pdfs/:filename` и санировать имена PDF
-- **Статус**: В процессе
+- **Статус**: Завершена
 - **Описание**: Эндпоинт выдачи PDF `GET /api/pdfs/:filename` использовал невалидированное имя файла и мог позволить доступ к файлам вне `generated_pdfs/` (path traversal). Дополнительно, при экспорте PDF имя файла формировалось с участием `template.code` без санации, что могло привести к записи файла в неожиданный путь.
 - **Шаги выполнения**:
   - [x] **Шаг 0**: Зафиксировать задачу и критерии приёмки в `docs/tasktracker.md` (эта запись).
-  - [ ] **Шаг 1**: В `server/routes.ts` валидировать `:filename` и отдавать файл только из каталога `generated_pdfs/` (исключить `../`, абсолютные пути, path separators).
-  - [ ] **Шаг 2**: В `server/routes.ts` санировать части имени файла при генерации PDF (в т.ч. `template.code`, `actNumber`) и гарантировать, что имя соответствует безопасному шаблону (`*.pdf`).
+  - [x] **Шаг 1**: В `server/routes.ts` валидировать `:filename` и отдавать файл только из каталога `generated_pdfs/` (исключить `../`, абсолютные пути, path separators).
+  - [x] **Шаг 2**: В `server/routes.ts` санировать части имени файла при генерации PDF (в т.ч. `template.code`, `actNumber`) и гарантировать, что имя соответствует безопасному шаблону (`*.pdf`).
 - **Acceptance Criteria**:
-  - [ ] `GET /api/pdfs/:filename` возвращает `400` на невалидные имена (включая `..`, `/`, `\\`, отсутствие `.pdf`).
-  - [ ] `GET /api/pdfs/:filename` **никогда** не читает файлы вне `generated_pdfs/` (даже при попытках traversal).
-  - [ ] Экспорт PDF создаёт файлы только внутри `generated_pdfs/`, имена файлов состоят из безопасных символов и оканчиваются на `.pdf`.
-  - [ ] `docs/changelog.md` содержит запись о security-фиксах (path traversal + санация имён файлов).
-  - [ ] `docs/project.md` уточняет ограничения/валидацию для `GET /api/pdfs/:filename`.
+  - [x] `GET /api/pdfs/:filename` возвращает `400` на невалидные имена (включая `..`, `/`, `\\`, отсутствие `.pdf`).
+  - [x] `GET /api/pdfs/:filename` **никогда** не читает файлы вне `generated_pdfs/` (даже при попытках traversal).
+  - [x] Экспорт PDF создаёт файлы только внутри `generated_pdfs/`, имена файлов состоят из безопасных символов и оканчиваются на `.pdf`.
+  - [x] `docs/changelog.md` содержит запись о security-фиксах (path traversal + санация имён файлов).
+  - [x] `docs/project.md` уточняет ограничения/валидацию для `GET /api/pdfs/:filename`.
 - **Зависимости**: `server/routes.ts`, `docs/changelog.md`, `docs/project.md`
 
 ---

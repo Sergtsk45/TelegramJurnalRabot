@@ -35,6 +35,26 @@ function eachDayInRange(start: string, end: string): string[] {
   return days;
 }
 
+function slugifyFilePart(input: unknown, fallback: string): string {
+  const s = String(input ?? "").trim();
+  const slug = s
+    .replace(/[^0-9A-Za-z_-]+/g, "_")
+    .replace(/^_+/, "")
+    .replace(/_+$/, "")
+    .slice(0, 64);
+  return slug || fallback;
+}
+
+function isSafePdfFilename(filename: string): boolean {
+  // Only allow a plain filename (no directories), with a .pdf extension.
+  // This protects sendFile() from path traversal attempts.
+  if (!filename) return false;
+  if (filename.length > 220) return false;
+  if (filename.includes("/") || filename.includes("\\")) return false;
+  // Disallow weird names like ".pdf" or leading dots.
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.pdf$/.test(filename);
+}
+
 // OpenAI is optional for local/dev runs. Only initialize when credentials exist.
 let openaiClient: OpenAI | null = null;
 function getOpenAIClient(): OpenAI | null {
@@ -1742,7 +1762,7 @@ export async function registerRoutes(
         };
 
         const pdfBuffer = await generateAosrPdf(actData);
-        const safeActNumber = String(actNumber).replace(/[^0-9A-Za-z_-]+/g, "_");
+        const safeActNumber = slugifyFilePart(actNumber, String(act.id));
         const filename = `aosr-act-${safeActNumber}.pdf`;
         const filePath = path.join(pdfDir, filename);
         fs.writeFileSync(filePath, pdfBuffer);
@@ -1833,7 +1853,8 @@ export async function registerRoutes(
 
         try {
           const pdfBuffer = await generateAosrPdf(actData);
-          const filename = `AOSR_${template.code}_${act.id}_${Date.now()}.pdf`;
+          const safeTemplateCode = slugifyFilePart(template.code, "template");
+          const filename = `AOSR_${safeTemplateCode}_${act.id}_${Date.now()}.pdf`;
           const filePath = path.join(pdfDir, filename);
           fs.writeFileSync(filePath, pdfBuffer);
 
@@ -1860,16 +1881,32 @@ export async function registerRoutes(
 
   // Serve generated PDFs
   app.get("/api/pdfs/:filename", (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(process.cwd(), "generated_pdfs", filename);
-    
+    const filename = String(req.params.filename ?? "");
+    if (!isSafePdfFilename(filename)) {
+      return res.status(400).json({ message: "Invalid filename" });
+    }
+
+    const pdfDir = path.join(process.cwd(), "generated_pdfs");
+    const filePath = path.join(pdfDir, filename);
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: "File not found" });
     }
-    
+
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-    res.sendFile(filePath);
+    return res.sendFile(filename, { root: pdfDir, dotfiles: "deny" }, (err) => {
+      if (!err) return;
+      if (res.headersSent) {
+        console.error("PDF sendFile failed after headers sent:", err);
+        return;
+      }
+      if ((err as any)?.code === "ENOENT") {
+        return res.status(404).json({ message: "File not found" });
+      }
+      console.error("PDF sendFile failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    });
   });
 
   // Deprecated: acts can be created only from schedule now.

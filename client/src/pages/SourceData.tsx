@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguageStore, translations } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, FileText, Loader2, Package, Plus, Save, Sparkles, Users, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Loader2, Package, Plus, Save, Users, Wrench } from "lucide-react";
 import { useCreateDocument, useDocuments } from "@/hooks/use-documents";
 import { MaterialWizard } from "@/components/materials/MaterialWizard";
 import { useProjectMaterials } from "@/hooks/use-materials";
@@ -43,118 +43,6 @@ function emptySourceData(): SourceDataDto {
       rep_builder_control: { personName: "" },
       rep_designer: { personName: "" },
       rep_work_performer: { personName: "" },
-    },
-  };
-}
-
-function demoSourceData(): SourceDataDto {
-  return {
-    object: {
-      title: "ЖК Северный · Корпус 2",
-      city: "Москва",
-      address: "г. Москва, ул. Примерная, д. 10",
-    },
-    parties: {
-      customer: {
-        fullName: 'ООО "Заказчик Девелопмент"',
-        shortName: 'ООО "ЗД"',
-        inn: "7701234567",
-        kpp: "770101001",
-        ogrn: "1157746000000",
-        sroFullName: 'Ассоциация "СРО СтандартСтрой"',
-        sroShortName: 'АССРО "СтандартСтрой"',
-        sroOgrn: "1097700000000",
-        sroInn: "7700000000",
-        addressLegal: "109012, г. Москва, ул. Тестовая, д. 1",
-        phone: "+7 (495) 000-00-01",
-        email: "customer@example.ru",
-      },
-      builder: {
-        fullName: 'ООО "Генподряд Строй"',
-        shortName: 'ООО "ГПС"',
-        inn: "7712345678",
-        kpp: "771201001",
-        ogrn: "1147746000001",
-        sroFullName: 'Ассоциация "СРО Строители Москвы"',
-        sroShortName: 'АССРО "СМ"',
-        sroOgrn: "1107700000001",
-        sroInn: "7700000001",
-        addressLegal: "115035, г. Москва, наб. Набережная, д. 5",
-        phone: "+7 (495) 000-00-02",
-        email: "builder@example.ru",
-      },
-      designer: {
-        fullName: 'ООО "ПроектИнжиниринг"',
-        shortName: 'ООО "ПИ"',
-        inn: "7723456789",
-        kpp: "772301001",
-        ogrn: "1137746000002",
-        sroFullName: 'Ассоциация "СРО Проектировщики РФ"',
-        sroShortName: 'АССРО "ПРФ"',
-        sroOgrn: "1117700000002",
-        sroInn: "7700000002",
-        addressLegal: "127055, г. Москва, ул. Инженерная, д. 7",
-        phone: "+7 (495) 000-00-03",
-        email: "designer@example.ru",
-      },
-    },
-    persons: {
-      developer_rep: {
-        personName: "Иванов И.И.",
-        position: "Инженер заказчика",
-        basisText: "доверенность № 1 от 01.01.2026",
-        lineText: "Иванов И.И., инженер заказчика",
-        signText: "Иванов И.И.",
-      },
-      contractor_rep: {
-        personName: "Петров П.П.",
-        position: "Главный инженер проекта",
-        basisText: "приказ № 12 от 10.01.2026",
-        lineText: "Петров П.П., ГИП",
-        signText: "Петров П.П.",
-      },
-      supervisor_rep: {
-        personName: "Сидоров С.С.",
-        position: "Инженер стройконтроля",
-        basisText: "договор № СК-01/26",
-        lineText: "Сидоров С.С., инженер СК",
-        signText: "Сидоров С.С.",
-      },
-      rep_customer_control: {
-        personName: "Кузнецов К.К.",
-        position: "Руководитель службы стройконтроля заказчика",
-        basisText: "приказ № 7 от 05.01.2026",
-        lineText: "Кузнецов К.К., руководитель СК",
-        signText: "Кузнецов К.К.",
-      },
-      rep_builder: {
-        personName: "Смирнов С.М.",
-        position: "Начальник участка",
-        basisText: "приказ № 21 от 12.01.2026",
-        lineText: "Смирнов С.М., НУ",
-        signText: "Смирнов С.М.",
-      },
-      rep_builder_control: {
-        personName: "Васильев В.В.",
-        position: "Инженер ПТО",
-        basisText: "доверенность № 5 от 15.01.2026",
-        lineText: "Васильев В.В., инженер ПТО",
-        signText: "Васильев В.В.",
-      },
-      rep_designer: {
-        personName: "Николаев Н.Н.",
-        position: "Главный архитектор проекта",
-        basisText: "приказ № 3 от 02.01.2026",
-        lineText: "Николаев Н.Н., ГАП",
-        signText: "Николаев Н.Н.",
-      },
-      rep_work_performer: {
-        personName: "Фёдоров Ф.Ф.",
-        position: "Производитель работ",
-        basisText: "приказ № 33 от 20.01.2026",
-        lineText: "Фёдоров Ф.Ф., прораб",
-        signText: "Фёдоров Ф.Ф.",
-      },
     },
   };
 }
@@ -242,18 +130,6 @@ export default function SourceData() {
     }
   };
 
-  const fillDemo = () => {
-    setDraft(demoSourceData());
-    setInitialized(true);
-    toast({
-      title: language === "ru" ? "Заполнено" : "Filled",
-      description:
-        language === "ru"
-          ? "Все поля заполнены тестовыми данными (не забудьте нажать «Сохранить»)."
-          : "All fields were filled with demo data (press “Save” to persist).",
-    });
-  };
-
   const materialsCount = (materialsQuery.data ?? []).length;
   const docsCount = (docsQuery.data ?? []).length;
   const personsFilledCount = useMemo(() => {
@@ -297,49 +173,58 @@ export default function SourceData() {
         }
       />
 
-      <div className="flex-1 overflow-hidden px-4 py-6 pb-24">
+      {/* Object selector (always above parties/sections) */}
+      <div className="sticky top-14 z-30 bg-background/95 backdrop-blur border-b border-border/40">
+        <div className="max-w-md mx-auto px-4 py-2 space-y-2">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 justify-between rounded-xl"
+              onClick={() => setObjectDialogOpen(true)}
+              data-testid="source-object-selector"
+            >
+              <span className="truncate">
+                {language === "ru" ? "Объект" : "Object"}:{" "}
+                <span className="font-medium">
+                  {draft.object.title || (language === "ru" ? "Объект по умолчанию" : "Default object")}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 opacity-70" />
+            </Button>
+
+            <Button
+              type="button"
+              size="icon"
+              className="rounded-xl"
+              onClick={save}
+              disabled={isSaving || !isDirty}
+              title={language === "ru" ? "Сохранить" : "Save"}
+              data-testid="source-save"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          <div className="text-xs text-muted-foreground truncate" data-testid="source-object-address">
+            {language === "ru" ? "Адрес" : "Address"}:{" "}
+            <span className="text-foreground/80">
+              {draft.object.address || (language === "ru" ? "Не указан" : "Not set")}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden pb-24">
         {isLoading ? (
-          <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <div className="flex items-center justify-center py-10 text-muted-foreground px-4">
             <Loader2 className="h-5 w-5 animate-spin mr-2" />
             {language === "ru" ? "Загрузка..." : "Loading..."}
           </div>
         ) : (
-          <div className="h-full flex flex-col gap-4">
+          <div className="h-full flex flex-col">
             <ScrollArea className="flex-1">
-              <div className="pr-2">
-                {/* Sticky object selector + address (Roadmap 52-114) */}
-                <div className="mb-4 sticky top-14 z-30 bg-background/95 backdrop-blur py-2 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 justify-between rounded-xl"
-                      onClick={() => setObjectDialogOpen(true)}
-                    >
-                      <span className="truncate">
-                        {language === "ru" ? "Объект" : "Object"}:{" "}
-                        <span className="font-medium">{draft.object.title || (language === "ru" ? "Объект по умолчанию" : "Default object")}</span>
-                      </span>
-                      <ChevronDown className="h-4 w-4 opacity-70" />
-                    </Button>
-
-                    <Button type="button" size="icon" className="rounded-xl" onClick={save} disabled={isSaving || !isDirty} title="Сохранить">
-                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    </Button>
-
-                    <Button type="button" size="icon" variant="outline" className="rounded-xl" onClick={fillDemo} disabled={isSaving} title="Тестовые данные">
-                      <Sparkles className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <div className="text-xs text-muted-foreground truncate">
-                    {language === "ru" ? "Адрес" : "Address"}:{" "}
-                    <span className="text-foreground/80">
-                      {draft.object.address || (language === "ru" ? "Не указан" : "Not set")}
-                    </span>
-                  </div>
-                </div>
-
+              <div className="max-w-md mx-auto px-4 pr-2 py-4">
                 {/* Parties / participants (horizontal scroll) */}
                 <div className="mb-4">
                   <div className="text-sm font-medium mb-2">{language === "ru" ? "Стороны/участники" : "Parties"}</div>

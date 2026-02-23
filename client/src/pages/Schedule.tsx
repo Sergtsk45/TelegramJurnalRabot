@@ -308,7 +308,7 @@ export default function Schedule() {
   const dayWidth = 24;
   const visibleDays = 60;
   const timelineWidth = visibleDays * dayWidth;
-  const rowHeight = 72;
+  const rowHeight = 88;
 
   // When auxiliary rows are expanded (estimate source), the left table grows,
   // so the timeline must also grow and shift bars down accordingly.
@@ -746,35 +746,34 @@ export default function Schedule() {
               {/* Таблица Ганта */}
               <Card className="glass-card overflow-hidden">
                 <CardContent className="p-0">
+                <div className="overflow-x-auto">
                 {/* Header */}
                 <div className="flex border-b bg-muted/20">
-                  <div className="flex-1 md:w-[400px] md:shrink-0 px-3 py-2">
+                  <div className="w-[160px] md:w-[400px] shrink-0 px-3 py-2">
                     <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
                       {language === "ru" ? "НАИМЕНОВАНИЕ РАБОТ" : "WORKS"}
                     </div>
                   </div>
-                  <div className="hidden md:block flex-1 overflow-x-auto">
-                    <div className="flex" style={{ width: timelineWidth }}>
-                      {Array.from({ length: visibleDays }).map((_, i) => {
-                        const d = addDays(parseISO(viewCalendarStart), i);
-                        return (
-                          <div
-                            key={i}
-                            className="shrink-0 border-l border-border/40 px-1 py-2 text-[10px] text-muted-foreground"
-                            style={{ width: dayWidth }}
-                            title={format(d, "yyyy-MM-dd")}
-                          >
-                            {format(d, "dd")}
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="flex shrink-0" style={{ width: timelineWidth }}>
+                    {Array.from({ length: visibleDays }).map((_, i) => {
+                      const d = addDays(parseISO(viewCalendarStart), i);
+                      return (
+                        <div
+                          key={i}
+                          className="shrink-0 border-l border-border/40 px-1 py-2 text-[10px] text-muted-foreground"
+                          style={{ width: dayWidth }}
+                          title={format(d, "yyyy-MM-dd")}
+                        >
+                          {format(d, "dd")}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Body */}
                 <div className="flex">
-                  <div className="flex-1 md:w-[400px] md:shrink-0 border-r">
+                  <div className="w-[160px] md:w-[400px] shrink-0 border-r">
                     {tasks.map((task) => {
                       const w = task.workId ? worksById.get(task.workId) : null;
                       const p = task.estimatePositionId ? estimatePositionsById.get(task.estimatePositionId) : null;
@@ -797,10 +796,10 @@ export default function Schedule() {
                       return (
                         <div key={task.id} className="border-b border-border/40 last:border-b-0">
                           {/* Main task row */}
-                          <div className="px-3 py-3" style={{ minHeight: rowHeight }}>
+                          <div className="px-3 py-2" style={{ height: rowHeight, overflow: 'hidden' }}>
                             <div className="flex items-start gap-2">
                               {/* Дата */}
-                              <div className="w-10 shrink-0 text-center">
+                              <div className="w-10 shrink-0 text-center hidden md:block">
                                 <div className="text-[13px] font-semibold leading-tight">
                                   {format(parseISO(String(task.startDate)), "dd", { locale: language === "ru" ? ru : enUS })}
                                 </div>
@@ -840,7 +839,7 @@ export default function Schedule() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-6 w-6 text-muted-foreground/60"
+                                      className="h-6 w-6 text-muted-foreground/60 hidden md:inline-flex"
                                       onClick={() => shiftTask(task, -1)}
                                       disabled={patchTask.isPending}
                                       aria-label={t.shiftLeft}
@@ -850,7 +849,7 @@ export default function Schedule() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-6 w-6 text-muted-foreground/60"
+                                      className="h-6 w-6 text-muted-foreground/60 hidden md:inline-flex"
                                       onClick={() => shiftTask(task, +1)}
                                       disabled={patchTask.isPending}
                                       aria-label={t.shiftRight}
@@ -870,7 +869,7 @@ export default function Schedule() {
                                 </div>
 
                                 {/* Название */}
-                                <p className="text-[13px] leading-snug text-foreground line-clamp-2">{title}</p>
+                                <p className="text-[13px] leading-snug text-foreground line-clamp-1">{title}</p>
 
                                 {/* Код + объём */}
                                 <div className="flex items-center gap-2 mt-1">
@@ -955,18 +954,17 @@ export default function Schedule() {
                     })}
                   </div>
 
-                  <div className="hidden md:block flex-1 overflow-x-auto">
-                    <div
-                      className="relative"
-                      style={{
-                        width: timelineWidth,
-                        height: scheduleRowLayout.totalRows * rowHeight,
-                        backgroundImage:
-                          `repeating-linear-gradient(to right, rgba(0,0,0,0.06) 0, rgba(0,0,0,0.06) 1px, transparent 1px, transparent ${dayWidth}px),` +
-                          `repeating-linear-gradient(to bottom, rgba(0,0,0,0.04) 0, rgba(0,0,0,0.04) 1px, transparent 1px, transparent ${rowHeight}px)`,
-                      }}
-                    >
-                      {tasks.map((task) => {
+                  <div
+                    className="relative shrink-0"
+                    style={{
+                      width: timelineWidth,
+                      height: scheduleRowLayout.totalRows * rowHeight,
+                      backgroundImage:
+                        `repeating-linear-gradient(to right, rgba(0,0,0,0.06) 0, rgba(0,0,0,0.06) 1px, transparent 1px, transparent ${dayWidth}px),` +
+                        `repeating-linear-gradient(to bottom, rgba(0,0,0,0.04) 0, rgba(0,0,0,0.04) 1px, transparent 1px, transparent ${rowHeight}px)`,
+                    }}
+                  >
+                    {tasks.map((task) => {
                         const start = differenceInCalendarDays(parseISO(String(task.startDate)), parseISO(viewCalendarStart));
                         const left = Math.max(0, start) * dayWidth;
                         const width = Math.max(1, Number(task.durationDays || 1)) * dayWidth;
@@ -989,9 +987,9 @@ export default function Schedule() {
                             {task.actNumber != null ? task.actNumber : "—"}
                           </button>
                         );
-                      })}
-                    </div>
+                    })}
                   </div>
+                </div>
                 </div>
                 </CardContent>
               </Card>

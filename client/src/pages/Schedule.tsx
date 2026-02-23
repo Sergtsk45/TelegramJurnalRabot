@@ -256,6 +256,15 @@ export default function Schedule() {
     return total > 0 ? total : null;
   };
 
+  const formatTzHours = (hoursRaw: number): string => {
+    const hours = Number(hoursRaw);
+    if (!Number.isFinite(hours) || hours <= 0) return "0";
+    const int = Math.round(hours);
+    if (Math.abs(hours - int) < 1e-9) return String(int);
+    // Show at most 1 digit after decimal (Russian locale uses comma).
+    return hours.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+  };
+
   // Build flat list of all estimate positions (ordered)
   const allEstimatePositions = useMemo(() => {
     const list: any[] = [];
@@ -836,6 +845,24 @@ export default function Schedule() {
                           : (w?.code || `ID:${task.workId ?? task.id}`);
                       const unit = sourceType === "estimate" ? String(p?.unit ?? "").trim() : "";
 
+                      const actNumber =
+                        typeof (task as any).actNumber === "number" && Number((task as any).actNumber) > 0
+                          ? Number((task as any).actNumber)
+                          : null;
+                      const actLabel = language === "ru"
+                        ? `акт ${actNumber ?? "-"}`
+                        : `act ${actNumber ?? "-"}`;
+                      const tzHours =
+                        sourceType === "estimate" ? (getLaborManHours(p) ?? 0) : 0;
+                      const tzLabel = language === "ru"
+                        ? `${formatTzHours(tzHours)} ч`
+                        : `${formatTzHours(tzHours)} h`;
+                      const brgPeople = 0;
+                      const brgLabel = language === "ru"
+                        ? `${brgPeople} чел`
+                        : `${brgPeople} ppl`;
+                      const actTzBrgLine = `${actLabel} · ${tzLabel} · ${brgLabel}`;
+
                       return (
                         <div key={task.id} className="border-b border-border/40 last:border-b-0">
                           {/* Main task row */}
@@ -856,17 +883,15 @@ export default function Schedule() {
 
                               {/* Основной контент */}
                               <div className="flex-1 min-w-0">
-                                {/* Статус + actions */}
+                                {/* Акт + ТЗ + БРГ (вместо статуса) + actions */}
                                 <div className="flex items-center justify-between mb-1">
                                   <span className={cn(
-                                    "text-[10px] font-medium uppercase px-2 py-0.5 rounded border",
-                                    task.actNumber != null
-                                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                    "text-[11px] font-medium px-2 py-0.5 rounded border",
+                                    actNumber != null
+                                      ? "border-primary/30 bg-primary/10 text-primary"
                                       : "border-border text-muted-foreground bg-muted/40"
                                   )}>
-                                    {task.actNumber != null
-                                      ? (language === "ru" ? "ПРИНЯТО" : "ACCEPTED")
-                                      : (language === "ru" ? "В РАБОТЕ" : "IN PROGRESS")}
+                                    {actTzBrgLine}
                                   </span>
                                   <div className="flex items-center gap-0.5">
                                     {sourceType === "estimate" && hasAuxiliaries && (

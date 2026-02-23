@@ -223,63 +223,66 @@ export default function SourceData() {
           </div>
         ) : (
           <div className="h-full flex flex-col">
+            {/* Parties / participants — вне ScrollArea, чтобы горизонтальный свайп работал на мобильных */}
+            <div className="max-w-md mx-auto w-full px-4 pt-4 pb-1 shrink-0">
+              <div className="text-sm font-medium mb-2">{language === "ru" ? "Стороны/участники" : "Parties"}</div>
+            </div>
+            <div
+              className="flex gap-3 overflow-x-auto pb-3 shrink-0"
+              style={{ paddingLeft: "1rem", paddingRight: "1rem", WebkitOverflowScrolling: "touch", touchAction: "pan-x" }}
+            >
+              {([
+                { key: "customer", title: language === "ru" ? "Заказчик" : "Customer" },
+                { key: "builder", title: language === "ru" ? "Подрядчик" : "Builder" },
+                { key: "designer", title: language === "ru" ? "Проектировщик" : "Designer" },
+              ] as const).map((role) => {
+                const party = draft.parties[role.key];
+                const name = String(party.shortName ?? party.fullName ?? "").trim() || (language === "ru" ? "Не заполнено" : "Not set");
+                const inn = String(party.inn ?? "").trim();
+                const filled = String(party.fullName ?? "").trim().length > 0;
+
+                return (
+                  <Card
+                    key={role.key}
+                    className="min-w-[180px] max-w-[220px] flex-shrink-0 rounded-xl cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => setPartyDialogRole(role.key)}
+                  >
+                    <CardContent className="p-4">
+                      <div className={cn("h-1 rounded-t-xl -mt-4 -mx-4 mb-3", filled ? "bg-emerald-500" : "bg-muted")} />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm font-medium">{role.title}</div>
+                        <div className={`h-2 w-2 rounded-full mt-1 ${filled ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
+                      </div>
+                      <div className="mt-2 text-sm leading-snug line-clamp-2">{name}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{inn ? `ИНН ${inn}` : (language === "ru" ? "ИНН не указан" : "INN not set")}</div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              <Card
+                className="min-w-[180px] max-w-[220px] flex-shrink-0 rounded-xl cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => setPersonsDialogOpen(true)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm font-medium">{language === "ru" ? "Ответственные лица" : "Responsible persons"}</div>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="mt-2 text-sm leading-snug line-clamp-2 text-muted-foreground">
+                    {language === "ru" ? "Подписанты и основания" : "Signers and authority basis"}
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground tabular-nums">
+                    {language === "ru"
+                      ? `Заполнено: ${personsFilledCount}/8`
+                      : `Filled: ${personsFilledCount}/8`}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
             <ScrollArea className="flex-1">
               <div className="max-w-md mx-auto px-4 pr-2 py-4">
-                {/* Parties / participants (horizontal scroll) */}
-                <div className="mb-4">
-                  <div className="text-sm font-medium mb-2">{language === "ru" ? "Стороны/участники" : "Parties"}</div>
-                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-                    {([
-                      { key: "customer", title: language === "ru" ? "Заказчик" : "Customer" },
-                      { key: "builder", title: language === "ru" ? "Подрядчик" : "Builder" },
-                      { key: "designer", title: language === "ru" ? "Проектировщик" : "Designer" },
-                    ] as const).map((role) => {
-                      const party = draft.parties[role.key];
-                      const name = String(party.shortName ?? party.fullName ?? "").trim() || (language === "ru" ? "Не заполнено" : "Not set");
-                      const inn = String(party.inn ?? "").trim();
-                      const filled = String(party.fullName ?? "").trim().length > 0;
-
-                      return (
-                        <Card
-                          key={role.key}
-                          className="min-w-[220px] rounded-xl cursor-pointer hover:border-primary/50 transition-colors"
-                          onClick={() => setPartyDialogRole(role.key)}
-                        >
-                          <CardContent className="p-4">
-                            <div className={cn("h-1 rounded-t-xl -mt-4 -mx-4 mb-3", filled ? "bg-emerald-500" : "bg-muted")} />
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="text-sm font-medium">{role.title}</div>
-                              <div className={`h-2 w-2 rounded-full mt-1 ${filled ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
-                            </div>
-                            <div className="mt-2 text-sm leading-snug line-clamp-2">{name}</div>
-                            <div className="mt-2 text-xs text-muted-foreground">{inn ? `ИНН ${inn}` : (language === "ru" ? "ИНН не указан" : "INN not set")}</div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-
-                    <Card
-                      className="min-w-[220px] rounded-xl cursor-pointer hover:border-primary/50 transition-colors"
-                      onClick={() => setPersonsDialogOpen(true)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="text-sm font-medium">{language === "ru" ? "Ответственные лица" : "Responsible persons"}</div>
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div className="mt-2 text-sm leading-snug line-clamp-2 text-muted-foreground">
-                          {language === "ru" ? "Подписанты и основания" : "Signers and authority basis"}
-                        </div>
-                        <div className="mt-2 text-xs text-muted-foreground tabular-nums">
-                          {language === "ru"
-                            ? `Заполнено: ${personsFilledCount}/8`
-                            : `Filled: ${personsFilledCount}/8`}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-
                 {/* Sections (cards, not tabs) */}
                 <div className="mb-6">
                   <div className="text-sm font-medium mb-2">{language === "ru" ? "Разделы" : "Sections"}</div>

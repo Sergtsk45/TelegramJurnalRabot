@@ -27,6 +27,34 @@ import { useDefaultSchedule } from "@/hooks/use-schedules";
 import { api, buildUrl } from "@shared/routes";
 import { useCurrentObject } from "@/hooks/use-source-data";
 import { useProjectMaterials } from "@/hooks/use-materials";
+import { isTelegramWebAppAvailable } from "@/lib/telegram";
+
+function withDownloadQuery(url: string): string {
+  return url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
+}
+
+function openPdfDownload(url: string, filename?: string) {
+  const downloadUrl = withDownloadQuery(url);
+  const absoluteUrl = new URL(downloadUrl, window.location.origin).toString();
+
+  if (isTelegramWebAppAvailable() && window.Telegram?.WebApp?.openLink) {
+    window.Telegram.WebApp.openLink(absoluteUrl, { try_instant_view: false });
+    return;
+  }
+
+  try {
+    const a = document.createElement("a");
+    a.href = absoluteUrl;
+    if (filename) a.download = filename;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch {
+    window.open(absoluteUrl, "_blank", "noopener,noreferrer");
+  }
+}
 
 interface ActTemplate {
   id: number;
@@ -280,9 +308,7 @@ export default function Acts() {
           title: language === "ru" ? "Успех" : "Success",
           description: language === "ru" ? `Создано ${exportResult.files.length} PDF-документов` : `Generated ${exportResult.files.length} PDF documents`,
         });
-        exportResult.files.forEach((file: { url: string; filename: string }) => {
-          window.open(file.url, "_blank");
-        });
+        exportResult.files.forEach((file: { url: string; filename: string }) => openPdfDownload(file.url, file.filename));
       }
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : undefined;
@@ -314,9 +340,7 @@ export default function Acts() {
           description: language === "ru" ? `Создано ${exportResult.files.length} PDF-документов` : `Generated ${exportResult.files.length} PDF documents`,
         });
 
-        exportResult.files.forEach((file: { url: string; filename: string }) => {
-          window.open(file.url, "_blank");
-        });
+        exportResult.files.forEach((file: { url: string; filename: string }) => openPdfDownload(file.url, file.filename));
       }
     } catch (error: any) {
       toast({

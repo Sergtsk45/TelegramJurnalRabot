@@ -1911,16 +1911,26 @@ export async function registerRoutes(
 
   // Serve generated PDFs
   app.get("/api/pdfs/:filename", (req, res) => {
-    const filename = req.params.filename;
+    const requested = String(req.params.filename ?? "");
+    const filename = path.basename(requested);
+    if (!filename || filename !== requested) {
+      return res.status(400).json({ message: "Invalid filename" });
+    }
+    if (!filename.toLowerCase().endsWith(".pdf")) {
+      return res.status(400).json({ message: "Invalid file type" });
+    }
+
     const filePath = path.join(process.cwd(), "generated_pdfs", filename);
     
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: "File not found" });
     }
     
+    const download = req.query.download === "1" || req.query.download === "true";
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-    res.sendFile(filePath);
+    res.setHeader("Content-Disposition", `${download ? "attachment" : "inline"}; filename="${filename}"`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(filePath);
   });
 
   // Deprecated: acts can be created only from schedule now.

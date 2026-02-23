@@ -32,7 +32,6 @@ import {
   usePatchScheduleTask, 
   useSchedule,
   useScheduleSourceInfo,
-  useGenerateActsFromSchedule
 } from "@/hooks/use-schedules";
 import { useActTemplates } from "@/hooks/use-act-templates";
 import { useReplaceTaskMaterials, useTaskMaterials } from "@/hooks/use-task-materials";
@@ -45,9 +44,10 @@ import {
   type TaskMaterialEditorItem,
 } from "@/components/schedule/TaskMaterialsEditor";
 import type { ScheduleTask, Work } from "@shared/schema";
-import { GanttChartSquare, Loader2, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Pencil, RotateCcw, AlertTriangle, ChevronsUpDown, Check } from "lucide-react";
+import { Loader2, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, AlertTriangle, ChevronsUpDown, Check, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
+import { ru, enUS } from "date-fns/locale";
 
 export default function Schedule() {
   const { language } = useLanguageStore();
@@ -69,14 +69,22 @@ export default function Schedule() {
   const bootstrapFromWorks = useBootstrapScheduleFromWorks(scheduleId);
   const bootstrapFromEstimate = useBootstrapScheduleFromEstimate(scheduleId);
   const changeSource = useChangeScheduleSource(scheduleId);
-  const generateActs = useGenerateActsFromSchedule(scheduleId);
   const { data: sourceInfo } = useScheduleSourceInfo(scheduleId);
   const patchTask = usePatchScheduleTask();
 
   const tasks: ScheduleTask[] = schedule?.tasks ?? [];
   const sourceType = schedule?.sourceType ?? 'works';
   const scheduleEstimateId = sourceType === "estimate" ? (schedule?.estimateId ?? null) : null;
-  
+
+  type TaskFilter = 'all' | 'with-act' | 'without-act';
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>('all');
+
+  const filteredTasks = useMemo(() => {
+    if (taskFilter === 'with-act') return tasks.filter((t) => t.actNumber != null);
+    if (taskFilter === 'without-act') return tasks.filter((t) => !t.actNumber);
+    return tasks;
+  }, [tasks, taskFilter]);
+
   const [changeSourceDialogOpen, setChangeSourceDialogOpen] = useState(false);
   const [confirmationInput, setConfirmationInput] = useState("");
   const [pendingSourceType, setPendingSourceType] = useState<'works' | 'estimate' | null>(null);
@@ -309,7 +317,7 @@ export default function Schedule() {
   const dayWidth = 24;
   const visibleDays = 60;
   const timelineWidth = visibleDays * dayWidth;
-  const rowHeight = 72;
+  const rowHeight = 88;
 
   // When auxiliary rows are expanded (estimate source), the left table grows,
   // so the timeline must also grow and shift bars down accordingly.
@@ -486,24 +494,6 @@ export default function Schedule() {
     );
   };
 
-  const handleGenerateActs = async () => {
-    try {
-      const result = await generateActs.mutateAsync();
-      toast({
-        title: language === "ru" ? "Акты сформированы" : "Acts generated",
-        description: language === "ru"
-          ? `Создано: ${result.created}, обновлено: ${result.updated}, удалено: ${result.deletedActNumbers?.length ?? 0}. Предупреждений: ${result.warnings?.length ?? 0}`
-          : `Created: ${result.created}, updated: ${result.updated}, deleted: ${result.deletedActNumbers?.length ?? 0}. Warnings: ${result.warnings?.length ?? 0}`,
-      });
-    } catch (err: any) {
-      toast({
-        title: t.errorTitle,
-        description: err?.message || "Failed to generate acts",
-        variant: "destructive",
-      });
-    }
-  };
-
   const shiftTask = async (task: ScheduleTask, deltaDays: number) => {
     try {
       const current = parseISO(String(task.startDate));
@@ -611,184 +601,208 @@ export default function Schedule() {
     }
   };
 
+  const [viewOffsetDays, setViewOffsetDays] = useState(0);
+  const viewCalendarStart = useMemo(
+    () => format(addDays(parseISO(calendarStart), viewOffsetDays), "yyyy-MM-dd"),
+    [calendarStart, viewOffsetDays],
+  );
+
   return (
     <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header title={t.title} />
+      <Header
+        title={t.title}
+        subtitle={
+          currentObject?.title
+            ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObject.title}`
+            : undefined
+        }
+      />
 
       <div className="flex-1 px-3 py-4 pb-24 w-full max-w-none">
         <div className="max-w-5xl mx-auto w-full space-y-3">
-          <Card className="glass-card">
-            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                  <GanttChartSquare className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-base">{t.title}</CardTitle>
-                  <CardDescription className="text-xs">
-                    {isPortrait ? t.rotateHint : t.rotateHintOk}
-                  </CardDescription>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground whitespace-nowrap">
-                    {language === "ru" ? "Источник" : "Source"}
-                  </div>
-                  <Select
-                    value={sourceSelectValue}
-                    onValueChange={(v) => {
-                      if (v === sourceSelectValue) return;
-                      if (v === "works") {
-                        requestChangeSource("works");
-                        return;
+          {/* Управляющий блок */}
+          <div className="mx-0 bg-card border border-border/60 rounded-2xl p-4 space-y-3">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-1.5">
+                {language === "ru" ? "ИСТОЧНИК ДАННЫХ" : "DATA SOURCE"}
+              </p>
+              <div className="flex gap-2">
+                <Select
+                  value={sourceSelectValue}
+                  onValueChange={(v) => {
+                    if (v === sourceSelectValue) return;
+                    if (v === "works") {
+                      requestChangeSource("works");
+                      return;
+                    }
+                    if (v.startsWith("estimate:")) {
+                      const raw = v.split(":")[1];
+                      const nextId = Number(raw);
+                      if (Number.isFinite(nextId) && nextId > 0) {
+                        requestChangeSource("estimate", nextId);
                       }
-                      if (v.startsWith("estimate:")) {
-                        const raw = v.split(":")[1];
-                        const nextId = Number(raw);
-                        if (Number.isFinite(nextId) && nextId > 0) {
-                          requestChangeSource("estimate", nextId);
-                        }
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs w-[260px]" disabled={!scheduleId || !schedule}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="works">{language === "ru" ? "ВОР (справочник работ)" : "Works (BoQ)"}</SelectItem>
-                      {estimates.length === 0 ? (
-                        <SelectItem value="estimate:0" disabled>
-                          {language === "ru" ? "Нет смет (импортируйте на /works)" : "No estimates (import on /works)"}
+                    }
+                  }}
+                >
+                  <SelectTrigger className="flex-1 h-10 rounded-xl text-[14px] font-medium" disabled={!scheduleId || !schedule}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="works">{language === "ru" ? "ВОР (Ведомость работ)" : "Works (BoQ)"}</SelectItem>
+                    {estimates.length === 0 ? (
+                      <SelectItem value="estimate:0" disabled>
+                        {language === "ru" ? "Нет смет (импортируйте на /works)" : "No estimates (import on /works)"}
+                      </SelectItem>
+                    ) : (
+                      estimates.map((e) => (
+                        <SelectItem key={e.id} value={`estimate:${e.id}`}>
+                          {language === "ru" ? "Смета" : "Estimate"}: {String((e as any).code ?? "").trim() ? `${(e as any).code} ` : ""}{e.name}
                         </SelectItem>
-                      ) : (
-                        estimates.map((e) => (
-                          <SelectItem key={e.id} value={`estimate:${e.id}`}>
-                            {language === "ru" ? "Смета" : "Estimate"}: {String((e as any).code ?? "").trim() ? `${(e as any).code} ` : ""}{e.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={handleBootstrap}
-                    disabled={!scheduleId || bootstrapFromWorks.isPending || bootstrapFromEstimate.isPending}
-                    data-testid="button-schedule-bootstrap"
-                  >
-                    {(bootstrapFromWorks.isPending || bootstrapFromEstimate.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    {tasks.length === 0 ? t.bootstrap : t.refreshFromWorks}
-                  </Button>
-                  {tasks.length > 0 && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="gap-2"
-                      onClick={handleGenerateActs}
-                      disabled={generateActs.isPending}
-                    >
-                      {generateActs.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      {language === "ru" ? "Сформировать акты" : "Generate acts"}
-                    </Button>
-                  )}
-                </div>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  className="h-10 px-3 rounded-xl gap-1.5 text-primary border-primary/30"
+                  onClick={handleBootstrap}
+                  disabled={!scheduleId || bootstrapFromWorks.isPending || bootstrapFromEstimate.isPending}
+                  data-testid="button-schedule-bootstrap"
+                >
+                  {(bootstrapFromWorks.isPending || bootstrapFromEstimate.isPending)
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <RefreshCw className="h-4 w-4" />}
+                  <span className="text-[13px]">{language === "ru" ? "Обновить" : "Refresh"}</span>
+                </Button>
               </div>
-            </CardHeader>
-          </Card>
+            </div>
+          </div>
 
           {defaultError || scheduleError ? (
-            <Card className="glass-card">
-              <CardContent className="p-4 text-sm text-destructive">
-                {t.errorLoad}
-              </CardContent>
-            </Card>
+            <div className="glass-card rounded-2xl p-4 text-sm text-destructive">
+              {t.errorLoad}
+            </div>
           ) : isLoadingDefault || isLoadingSchedule ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : tasks.length === 0 ? (
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-base">{t.emptyTitle}</CardTitle>
-                <CardDescription className="text-sm">
-                  {sourceType === "estimate"
-                    ? (estimates.length === 0
-                        ? (language === "ru" ? "Нет смет. Импортируйте смету на /works и выберите её как источник." : "No estimates. Import an estimate on /works and select it as the source.")
-                        : (language === "ru" ? "Выберите смету как источник и нажмите «Создать»." : "Select an estimate as the source and click “Create”."))
-                    : (works.length === 0 ? t.emptyNoWorks : t.emptyHasWorks)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex items-center gap-2">
-                <Button
-                  onClick={handleBootstrap}
-                  disabled={
-                    bootstrapFromWorks.isPending ||
-                    bootstrapFromEstimate.isPending ||
-                    (sourceType === "works" ? works.length === 0 : estimates.length === 0)
-                  }
-                >
-                  {(bootstrapFromWorks.isPending || bootstrapFromEstimate.isPending) ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-4 w-4" />
-                  )}
-                  {t.bootstrap}
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="glass-card rounded-2xl p-4">
+              <div className="text-base font-semibold mb-1">{t.emptyTitle}</div>
+              <div className="text-sm text-muted-foreground mb-4">
+                {sourceType === "estimate"
+                  ? (estimates.length === 0
+                      ? (language === "ru" ? "Нет смет. Импортируйте смету на /works и выберите её как источник." : "No estimates. Import an estimate on /works and select it as the source.")
+                      : (language === "ru" ? "Выберите смету как источник и нажмите «Создать»." : "Select an estimate as the source and click \"Create\"."))
+                  : (works.length === 0 ? t.emptyNoWorks : t.emptyHasWorks)}
+              </div>
+              <Button
+                onClick={handleBootstrap}
+                disabled={
+                  bootstrapFromWorks.isPending ||
+                  bootstrapFromEstimate.isPending ||
+                  (sourceType === "works" ? works.length === 0 : estimates.length === 0)
+                }
+              >
+                {(bootstrapFromWorks.isPending || bootstrapFromEstimate.isPending) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
+                {t.bootstrap}
+              </Button>
+            </div>
           ) : (
-            <Card className="glass-card overflow-hidden">
-              <CardContent className="p-0">
+            <>
+              {/* Навигация по месяцу */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setViewOffsetDays((d) => d - 30)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-center">
+                    <p className="text-[15px] font-semibold">
+                      {format(parseISO(viewCalendarStart), language === "ru" ? "LLLL yyyy" : "MMMM yyyy", {
+                        locale: language === "ru" ? ru : enUS,
+                      })}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      {language === "ru"
+                        ? `НЕДЕЛЯ ${format(parseISO(viewCalendarStart), "ww")}`
+                        : `WEEK ${format(parseISO(viewCalendarStart), "ww")}`}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setViewOffsetDays((d) => d + 30)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-1 bg-muted/40 rounded-full p-0.5">
+                  {(["all", "with-act", "without-act"] as TaskFilter[]).map((f) => {
+                    const labels: Record<TaskFilter, { ru: string; en: string }> = {
+                      all: { ru: "Все", en: "All" },
+                      "with-act": { ru: "С актом", en: "W/ act" },
+                      "without-act": { ru: "Без акта", en: "No act" },
+                    };
+                    return (
+                      <button
+                        key={f}
+                        onClick={() => setTaskFilter(f)}
+                        className={cn(
+                          "px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all",
+                          taskFilter === f
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {language === "ru" ? labels[f].ru : labels[f].en}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Таблица Ганта */}
+              <Card className="glass-card overflow-hidden">
+                <CardContent className="p-0">
+                <div className="overflow-x-auto">
                 {/* Header */}
                 <div className="flex border-b bg-muted/20">
-                  <div className="w-[500px] shrink-0 px-3 py-2">
-                    <div className="grid grid-cols-[24px_minmax(0,1fr)_4rem_4rem_4rem_auto] gap-x-2">
-                      <div />
-                      <div className="text-xs font-medium text-muted-foreground">{t.taskColumn}</div>
-                      <div className="text-xs font-medium text-muted-foreground text-right border-l border-border/40 px-1">
-                        {language === "ru" ? "Объём" : "Qty"}
-                      </div>
-                      <div className="text-xs font-medium text-muted-foreground text-right border-l border-border/40 px-1">
-                        {language === "ru" ? "ТЗ" : "Labor"}
-                      </div>
-                      <div className="text-xs font-medium text-muted-foreground text-right border-l border-border/40 px-1">
-                        {language === "ru" ? "Брг" : "Team"}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <div className="h-8 w-8" />
-                        <div className="h-8 w-8" />
-                        <div className="h-8 w-8" />
-                      </div>
+                  <div className="w-[160px] md:w-[400px] shrink-0 px-3 py-2">
+                    <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                      {language === "ru" ? "НАИМЕНОВАНИЕ РАБОТ" : "WORKS"}
                     </div>
                   </div>
-                  <div className="flex-1 overflow-x-auto">
-                    <div className="flex" style={{ width: timelineWidth }}>
-                      {Array.from({ length: visibleDays }).map((_, i) => {
-                        const d = addDays(parseISO(calendarStart), i);
-                        return (
-                          <div
-                            key={i}
-                            className="shrink-0 border-l border-border/40 px-1 py-2 text-[10px] text-muted-foreground"
-                            style={{ width: dayWidth }}
-                            title={format(d, "yyyy-MM-dd")}
-                          >
-                            {format(d, "dd")}
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="flex shrink-0" style={{ width: timelineWidth }}>
+                    {Array.from({ length: visibleDays }).map((_, i) => {
+                      const d = addDays(parseISO(viewCalendarStart), i);
+                      return (
+                        <div
+                          key={i}
+                          className="shrink-0 border-l border-border/40 px-1 py-2 text-[10px] text-muted-foreground"
+                          style={{ width: dayWidth }}
+                          title={format(d, "yyyy-MM-dd")}
+                        >
+                          {format(d, "dd")}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Body */}
                 <div className="flex">
-                  <div className="w-[500px] shrink-0 border-r">
-                    {tasks.map((task) => {
+                  <div className="w-[160px] md:w-[400px] shrink-0 border-r">
+                    {filteredTasks.map((task) => {
                       const w = task.workId ? worksById.get(task.workId) : null;
                       const p = task.estimatePositionId ? estimatePositionsById.get(task.estimatePositionId) : null;
                       const title =
@@ -801,119 +815,99 @@ export default function Schedule() {
                       const hasAuxiliaries = auxiliaries.length > 0;
                       const isExpanded = expandedTaskIds.has(task.id);
 
+                      const codeLabel =
+                        sourceType === "estimate"
+                          ? (p?.lineNo || p?.code || `ID:${task.estimatePositionId ?? task.id}`)
+                          : (w?.code || `ID:${task.workId ?? task.id}`);
+                      const unit = sourceType === "estimate" ? String(p?.unit ?? "").trim() : "";
+
                       return (
-                        <div key={task.id}>
+                        <div key={task.id} className="border-b border-border/40 last:border-b-0">
                           {/* Main task row */}
-                          <div
-                            className="px-3 py-2 border-b border-border/60"
-                            style={{ height: rowHeight }}
-                          >
-                            <div className="grid h-full grid-cols-[24px_minmax(0,1fr)_4rem_4rem_4rem_auto] grid-rows-[auto_auto] gap-x-2 gap-y-1">
-                              {/* Expand/collapse button (only for estimate with auxiliaries) */}
-                              <div className="row-start-1 row-end-3 col-start-1 flex items-start justify-start">
-                                {sourceType === "estimate" && hasAuxiliaries ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 shrink-0"
-                                    onClick={() => toggleTaskExpanded(task.id)}
-                                  >
-                                    <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
-                                  </Button>
-                                ) : (
-                                  <div className="w-6 shrink-0" />
-                                )}
+                          <div className="px-3 py-2" style={{ height: rowHeight, overflow: 'hidden' }}>
+                            <div className="flex items-start gap-2">
+                              {/* Дата */}
+                              <div className="w-10 shrink-0 text-center hidden md:block">
+                                <div className="text-[13px] font-semibold leading-tight">
+                                  {format(parseISO(String(task.startDate)), "dd", { locale: language === "ru" ? ru : enUS })}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground uppercase">
+                                  {format(parseISO(String(task.startDate)), "MMM", { locale: language === "ru" ? ru : enUS })}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground uppercase">
+                                  {format(parseISO(String(task.startDate)), "EEE", { locale: language === "ru" ? ru : enUS })}
+                                </div>
                               </div>
 
-                              {/* Row 2: № строки | № акта | ед. изм. */}
-                              <div className="row-start-2 col-start-2 min-w-0">
-                                {(() => {
-                                  const codeLabel =
-                                    sourceType === "estimate"
-                                      ? (p?.lineNo || p?.code || `ID:${task.estimatePositionId ?? task.id}`)
-                                      : (w?.code || `ID:${task.workId ?? task.id}`);
-                                  const unit = sourceType === "estimate" ? String(p?.unit ?? "").trim() : "";
-                                  const actLabel = task.actNumber != null ? String(task.actNumber) : "—";
+                              {/* Основной контент */}
+                              <div className="flex-1 min-w-0">
+                                {/* Статус + actions */}
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={cn(
+                                    "text-[10px] font-medium uppercase px-2 py-0.5 rounded border",
+                                    task.actNumber != null
+                                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                      : "border-border text-muted-foreground bg-muted/40"
+                                  )}>
+                                    {task.actNumber != null
+                                      ? (language === "ru" ? "ПРИНЯТО" : "ACCEPTED")
+                                      : (language === "ru" ? "В РАБОТЕ" : "IN PROGRESS")}
+                                  </span>
+                                  <div className="flex items-center gap-0.5">
+                                    {sourceType === "estimate" && hasAuxiliaries && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground/60"
+                                        onClick={() => toggleTaskExpanded(task.id)}
+                                      >
+                                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded ? "rotate-0" : "-rotate-90")} />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground/60 hidden md:inline-flex"
+                                      onClick={() => shiftTask(task, -1)}
+                                      disabled={patchTask.isPending}
+                                      aria-label={t.shiftLeft}
+                                    >
+                                      <ChevronLeft className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground/60 hidden md:inline-flex"
+                                      onClick={() => shiftTask(task, +1)}
+                                      disabled={patchTask.isPending}
+                                      aria-label={t.shiftRight}
+                                    >
+                                      <ChevronRight className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground/60"
+                                      onClick={() => openEdit(task)}
+                                      aria-label={t.edit}
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
 
-                                  const sep = (
-                                    <span className="px-1 text-muted-foreground/60" aria-hidden="true">
-                                      |
+                                {/* Название */}
+                                <p className="text-[13px] leading-snug text-foreground line-clamp-1">{title}</p>
+
+                                {/* Код + объём */}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[11px] text-muted-foreground font-mono">{String(codeLabel)}</span>
+                                  {((task as any).quantity != null) && (
+                                    <span className="text-[12px] font-semibold text-primary">
+                                      {Number((task as any).quantity).toLocaleString("ru-RU")} {(task as any).unit || unit}
                                     </span>
-                                  );
-
-                                  return (
-                                    <div className="flex items-center text-xs text-muted-foreground min-w-0">
-                                      <span className="font-mono shrink-0">{String(codeLabel)}</span>
-                                      {sep}
-                                      <span className="font-mono shrink-0">{actLabel}</span>
-                                      {unit ? (
-                                        <>
-                                          {sep}
-                                          <span className="truncate">{unit}</span>
-                                        </>
-                                      ) : null}
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-
-                              {/* Quantity column (Row 2) — independent task quantity */}
-                              <div className="row-start-2 col-start-3 w-16 text-xs text-muted-foreground text-right px-1 border-l border-border/40">
-                                {(() => {
-                                  const qty = parseNumeric((task as any).quantity);
-                                  return qty != null ? qty.toLocaleString(language === "ru" ? "ru-RU" : "en-US") : "—";
-                                })()}
-                              </div>
-
-                              {/* Labor column (Row 2) */}
-                              <div className="row-start-2 col-start-4 w-16 text-xs text-muted-foreground text-right px-1 border-l border-border/40">
-                                {sourceType === "estimate" ? (() => {
-                                  const labor = getLaborManHours(p);
-                                  return labor != null ? labor.toLocaleString(language === "ru" ? "ru-RU" : "en-US") : "—";
-                                })() : "—"}
-                              </div>
-
-                              {/* Brigade column (Row 2) — placeholder, not used yet */}
-                              <div className="row-start-2 col-start-5 w-16 text-xs text-muted-foreground text-right px-1 border-l border-border/40">
-                                —
-                              </div>
-
-                              {/* Buttons (Row 2) */}
-                              <div className="row-start-2 col-start-6 flex items-center gap-1 shrink-0">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => shiftTask(task, -1)}
-                                  disabled={patchTask.isPending}
-                                  aria-label={t.shiftLeft}
-                                >
-                                  <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => shiftTask(task, +1)}
-                                  disabled={patchTask.isPending}
-                                  aria-label={t.shiftRight}
-                                >
-                                  <ChevronRight className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => openEdit(task)}
-                                  aria-label={t.edit}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              </div>
-
-                              {/* Row 1: Title */}
-                              <div className="row-start-1 col-start-2 col-end-5 min-w-0 text-sm font-medium leading-snug whitespace-normal break-words line-clamp-2">
-                                {title}
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -943,7 +937,7 @@ export default function Schedule() {
                                         ? (language === "ru" ? "частично" : "partial")
                                         : (language === "ru" ? "нет" : "none");
 
-                                  const className =
+                                  const badgeClassName =
                                     status === "ok"
                                       ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
                                       : status === "partial"
@@ -968,7 +962,7 @@ export default function Schedule() {
                                             onClick={() => openLinkDialog(aux)}
                                             aria-label={language === "ru" ? "Привязка материала" : "Link material"}
                                           >
-                                            <Badge variant="outline" className={className}>
+                                            <Badge variant="outline" className={badgeClassName}>
                                               {label}
                                             </Badge>
                                           </button>
@@ -988,19 +982,18 @@ export default function Schedule() {
                     })}
                   </div>
 
-                  <div className="flex-1 overflow-x-auto">
-                    <div
-                      className="relative"
-                      style={{
-                        width: timelineWidth,
-                        height: scheduleRowLayout.totalRows * rowHeight,
-                        backgroundImage:
-                          `repeating-linear-gradient(to right, rgba(0,0,0,0.06) 0, rgba(0,0,0,0.06) 1px, transparent 1px, transparent ${dayWidth}px),` +
-                          `repeating-linear-gradient(to bottom, rgba(0,0,0,0.04) 0, rgba(0,0,0,0.04) 1px, transparent 1px, transparent ${rowHeight}px)`,
-                      }}
-                    >
-                      {tasks.map((task) => {
-                        const start = differenceInCalendarDays(parseISO(String(task.startDate)), parseISO(calendarStart));
+                  <div
+                    className="relative shrink-0"
+                    style={{
+                      width: timelineWidth,
+                      height: scheduleRowLayout.totalRows * rowHeight,
+                      backgroundImage:
+                        `repeating-linear-gradient(to right, rgba(0,0,0,0.06) 0, rgba(0,0,0,0.06) 1px, transparent 1px, transparent ${dayWidth}px),` +
+                        `repeating-linear-gradient(to bottom, rgba(0,0,0,0.04) 0, rgba(0,0,0,0.04) 1px, transparent 1px, transparent ${rowHeight}px)`,
+                    }}
+                  >
+                    {filteredTasks.map((task) => {
+                        const start = differenceInCalendarDays(parseISO(String(task.startDate)), parseISO(viewCalendarStart));
                         const left = Math.max(0, start) * dayWidth;
                         const width = Math.max(1, Number(task.durationDays || 1)) * dayWidth;
                         const topRow = scheduleRowLayout.taskTopRowIndexByTaskId.get(task.id) ?? 0;
@@ -1022,12 +1015,13 @@ export default function Schedule() {
                             {task.actNumber != null ? task.actNumber : "—"}
                           </button>
                         );
-                      })}
-                    </div>
+                    })}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                </div>
+                </CardContent>
+              </Card>
+            </>
           )}
         </div>
       </div>

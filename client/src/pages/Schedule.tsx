@@ -168,6 +168,19 @@ export default function Schedule() {
     );
   }, [editOpen, taskMaterialsQuery.data]);
 
+  useEffect(() => {
+    if (!actTemplatePopoverOpen || actTemplateSearch.trim() !== "") return;
+    const allKeys = Object.keys(groupedActTemplates);
+    if (allKeys.length === 0) return;
+    let selectedCategory: string | undefined;
+    if (editActTemplateId) {
+      selectedCategory = allKeys.find((key) =>
+        (groupedActTemplates[key] ?? []).some((t: any) => String(t.id) === editActTemplateId),
+      );
+    }
+    setCollapsedCategories(new Set(allKeys.filter((k) => k !== selectedCategory)));
+  }, [actTemplatePopoverOpen]);
+
   const upsertLink = useUpsertEstimatePositionLink(scheduleId);
   const deleteLink = useDeleteEstimatePositionLink(scheduleId);
 
@@ -1200,6 +1213,11 @@ export default function Schedule() {
                       />
                       <CommandList className="max-h-72">
                         <CommandEmpty>{language === "ru" ? "Шаблон не найден" : "No template found"}</CommandEmpty>
+                        {actTemplateSearch.trim() === "" && Object.keys(groupedActTemplates).length > 0 && (
+                          <div className="px-3 py-2 text-xs text-muted-foreground border-b">
+                            {language === "ru" ? "Нажмите на раздел, чтобы раскрыть" : "Tap a section to expand"}
+                          </div>
+                        )}
                         {Object.entries(groupedActTemplates).map(([categoryKey, templates]) => {
                           const catInfo = (templatesData?.categories as any)?.[categoryKey];
                           const catLabel = language === "ru"
@@ -1219,7 +1237,7 @@ export default function Schedule() {
                             <div key={categoryKey}>
                               <button
                                 type="button"
-                                className="flex w-full items-center justify-between px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"
+                                className="flex w-full items-center justify-between px-3 py-3 hover:bg-accent rounded-sm cursor-pointer"
                                 onClick={() => {
                                   if (isSearching) return;
                                   setCollapsedCategories((prev) => {
@@ -1230,17 +1248,17 @@ export default function Schedule() {
                                   });
                                 }}
                               >
-                                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                  {catLabel}
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                  <Badge variant="secondary" className="text-xs h-4 px-1.5 py-0 leading-none">
-                                    {filtered.length}
-                                  </Badge>
+                                <div className="flex items-center gap-2">
                                   {!isSearching && (
-                                    <ChevronDown className={cn("h-3 w-3 text-muted-foreground transition-transform duration-150", isCollapsed && "-rotate-90")} />
+                                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0", isCollapsed && "-rotate-90")} />
                                   )}
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                                    {catLabel}
+                                  </span>
                                 </div>
+                                <Badge variant="secondary" className="text-xs h-5 px-1.5 py-0 leading-none">
+                                  {filtered.length}
+                                </Badge>
                               </button>
                               {!isCollapsed && filtered.map((tpl: any) => (
                                 <CommandItem
@@ -1251,11 +1269,11 @@ export default function Schedule() {
                                     setActTemplatePopoverOpen(false);
                                     setActTemplateSearch("");
                                   }}
-                                  className="pl-4"
+                                  className="pl-4 py-2 items-start min-h-10"
                                 >
-                                  <Check className={cn("mr-2 h-4 w-4 shrink-0", editActTemplateId === String(tpl.id) ? "opacity-100" : "opacity-0")} />
-                                  <span className="font-mono text-xs text-muted-foreground mr-2 shrink-0">{String(tpl.code ?? "")}</span>
-                                  <span className="truncate">{language === "ru" ? String(tpl.title ?? "") : String((tpl as any).titleEn ?? tpl.title ?? "")}</span>
+                                  <Check className={cn("mr-2 h-4 w-4 shrink-0 mt-0.5", editActTemplateId === String(tpl.id) ? "opacity-100" : "opacity-0")} />
+                                  <span className="font-mono text-xs text-muted-foreground mr-2 shrink-0 mt-0.5">{String(tpl.code ?? "")}</span>
+                                  <span className="whitespace-normal leading-snug break-words">{language === "ru" ? String(tpl.title ?? "") : String((tpl as any).titleEn ?? tpl.title ?? "")}</span>
                                 </CommandItem>
                               ))}
                             </div>

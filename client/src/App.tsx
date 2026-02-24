@@ -15,6 +15,8 @@ import SourceData from "@/pages/SourceData";
 import SourceMaterials from "@/pages/SourceMaterials";
 import SourceMaterialDetail from "@/pages/SourceMaterialDetail";
 import SourceDocuments from "@/pages/SourceDocuments";
+import SelectActTemplate from "@/pages/SelectActTemplate";
+import SelectTaskMaterials from "@/pages/SelectTaskMaterials";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminMessages from "@/pages/admin/AdminMessages";
@@ -32,6 +34,8 @@ function Router() {
       <Route path="/source/materials" component={SourceMaterials} />
       <Route path="/source/materials/:id" component={SourceMaterialDetail} />
       <Route path="/source/documents" component={SourceDocuments} />
+      <Route path="/select-act-template" component={SelectActTemplate} />
+      <Route path="/select-task-materials" component={SelectTaskMaterials} />
       <Route path="/settings" component={Settings} />
       {/* Admin Panel */}
       <Route path="/admin" component={AdminDashboard} />

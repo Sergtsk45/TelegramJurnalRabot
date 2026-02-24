@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,8 +14,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,18 +37,14 @@ import { useReplaceTaskMaterials, useTaskMaterials } from "@/hooks/use-task-mate
 import { useCurrentObject } from "@/hooks/use-source-data";
 import { useProjectMaterials } from "@/hooks/use-materials";
 import { ExecutiveSchemesEditor, type ExecutiveSchemeItem } from "@/components/schedule/ExecutiveSchemesEditor";
-import {
-  TaskMaterialsEditor,
-  type ProjectMaterialOption,
-  type TaskMaterialEditorItem,
-} from "@/components/schedule/TaskMaterialsEditor";
 import type { ScheduleTask, Work } from "@shared/schema";
-import { Loader2, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, AlertTriangle, ChevronsUpDown, Check, MoreVertical } from "lucide-react";
+import { Loader2, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, AlertTriangle, ChevronsUpDown, Check, MoreVertical, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { ru, enUS } from "date-fns/locale";
 
 export default function Schedule() {
+  const [, navigate] = useLocation();
   const { language } = useLanguageStore();
   const t = translations[language].schedule;
   const { toast } = useToast();
@@ -104,15 +99,11 @@ export default function Schedule() {
   const [editDurationDays, setEditDurationDays] = useState<number>(1);
   const [editActNumber, setEditActNumber] = useState<string>("");
   const [editActTemplateId, setEditActTemplateId] = useState<string>("");
-  const [actTemplatePopoverOpen, setActTemplatePopoverOpen] = useState(false);
-  const [actTemplateSearch, setActTemplateSearch] = useState("");
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [editQuantity, setEditQuantity] = useState<string>("");
   const [editUnit, setEditUnit] = useState<string>("");
   const [editProjectDrawings, setEditProjectDrawings] = useState<string>("");
   const [editNormativeRefs, setEditNormativeRefs] = useState<string>("");
   const [editExecutiveSchemes, setEditExecutiveSchemes] = useState<ExecutiveSchemeItem[]>([]);
-  const [editMaterials, setEditMaterials] = useState<TaskMaterialEditorItem[]>([]);
 
   const { data: estimates = [] } = useEstimates();
   const activeEstimateId = scheduleEstimateId;
@@ -121,9 +112,8 @@ export default function Schedule() {
   const { data: subrowStatuses } = useEstimateSubrowStatuses(sourceType === "estimate" ? scheduleId : null);
 
   const { data: currentObject } = useCurrentObject();
-  const objectId = currentObject?.id;
-  const { data: projectMaterials = [] } = useProjectMaterials(objectId);
   const { data: templatesData } = useActTemplates();
+  const { data: projectMaterials = [] } = useProjectMaterials(currentObject?.id);
 
   const groupedActTemplates = useMemo(() => {
     const templates = templatesData?.templates ?? [];
@@ -141,45 +131,30 @@ export default function Schedule() {
   }, [editActTemplateId, templatesData]);
 
   const taskMaterialsQuery = useTaskMaterials(selectedTask?.id);
-  const replaceTaskMaterials = useReplaceTaskMaterials(selectedTask?.id);
 
-  const projectMaterialOptions: ProjectMaterialOption[] = useMemo(() => {
-    return (projectMaterials as any[]).map((m: any) => {
-      const label =
-        String(m?.nameOverride ?? "").trim() ||
-        String(m?.name ?? "").trim() ||
-        (m?.catalogMaterial?.name ? String(m.catalogMaterial.name) : "") ||
-        `Материал #${String(m?.id)}`;
-      return { id: Number(m.id), label };
-    });
-  }, [projectMaterials]);
-
-  // When dialog opens, load current task_materials
+  // Handle return from SelectActTemplate page
   useEffect(() => {
-    if (!editOpen) return;
-    const list = (taskMaterialsQuery.data ?? []) as any[];
-    setEditMaterials(
-      list.map((r) => ({
-        projectMaterialId: Number(r.projectMaterialId),
-        batchId: r.batchId == null ? null : Number(r.batchId),
-        qualityDocumentId: r.qualityDocumentId == null ? null : Number(r.qualityDocumentId),
-        note: r.note ?? null,
-      })),
-    );
-  }, [editOpen, taskMaterialsQuery.data]);
+    const handlePopState = () => {
+      const state = window.history.state;
+      if (state?.selectedTemplateId !== undefined) {
+        // User returned from SelectActTemplate with a selection
+        if (state.selectedTemplateId === null) {
+          setEditActTemplateId("");
+        } else {
+          setEditActTemplateId(String(state.selectedTemplateId));
+        }
+        // Clear the state to prevent re-triggering
+        window.history.replaceState({}, document.title);
+      }
+    };
 
-  useEffect(() => {
-    if (!actTemplatePopoverOpen || actTemplateSearch.trim() !== "") return;
-    const allKeys = Object.keys(groupedActTemplates);
-    if (allKeys.length === 0) return;
-    let selectedCategory: string | undefined;
-    if (editActTemplateId) {
-      selectedCategory = allKeys.find((key) =>
-        (groupedActTemplates[key] ?? []).some((t: any) => String(t.id) === editActTemplateId),
-      );
-    }
-    setCollapsedCategories(new Set(allKeys.filter((k) => k !== selectedCategory)));
-  }, [actTemplatePopoverOpen]);
+    // Check immediately in case we just navigated back
+    handlePopState();
+
+    // Also listen for popstate events
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const upsertLink = useUpsertEstimatePositionLink(scheduleId);
   const deleteLink = useDeleteEstimatePositionLink(scheduleId);
@@ -600,16 +575,6 @@ export default function Schedule() {
           updateAllTasks: nextActNumber != null && nextActTemplateId != null ? true : undefined,
         },
         scheduleId: scheduleId ?? undefined,
-      });
-
-      await replaceTaskMaterials.mutateAsync({
-        items: (editMaterials ?? []).map((it, idx) => ({
-          projectMaterialId: it.projectMaterialId,
-          batchId: it.batchId ?? null,
-          qualityDocumentId: it.qualityDocumentId ?? null,
-          note: it.note ?? null,
-          orderIndex: idx,
-        })),
       });
 
       setEditOpen(false);
@@ -1213,101 +1178,22 @@ export default function Schedule() {
 
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === "ru" ? "Тип акта (шаблон)" : "Act type (template)"}</label>
-                <Popover open={actTemplatePopoverOpen} onOpenChange={setActTemplatePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={actTemplatePopoverOpen}
-                      className="w-full justify-between font-normal h-9 px-3 text-sm"
-                    >
-                      <span className={cn("truncate", !selectedActTemplate && "text-muted-foreground")}>
-                        {selectedActTemplate
-                          ? `${String(selectedActTemplate.code ?? "")} — ${language === "ru" ? String(selectedActTemplate.title ?? "") : String((selectedActTemplate as any).titleEn ?? selectedActTemplate.title ?? "")}`
-                          : (language === "ru" ? "Выбрать тип акта" : "Select act type")}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <Command shouldFilter={false}>
-                      <CommandInput
-                        placeholder={language === "ru" ? "Поиск шаблона..." : "Search template..."}
-                        value={actTemplateSearch}
-                        onValueChange={setActTemplateSearch}
-                      />
-                      <CommandList className="max-h-72">
-                        <CommandEmpty>{language === "ru" ? "Шаблон не найден" : "No template found"}</CommandEmpty>
-                        {actTemplateSearch.trim() === "" && Object.keys(groupedActTemplates).length > 0 && (
-                          <div className="px-3 py-2 text-xs text-muted-foreground border-b">
-                            {language === "ru" ? "Нажмите на раздел, чтобы раскрыть" : "Tap a section to expand"}
-                          </div>
-                        )}
-                        {Object.entries(groupedActTemplates).map(([categoryKey, templates]) => {
-                          const catInfo = (templatesData?.categories as any)?.[categoryKey];
-                          const catLabel = language === "ru"
-                            ? (catInfo?.name ?? categoryKey)
-                            : (catInfo?.nameEn ?? catInfo?.name ?? categoryKey);
-                          const isSearching = actTemplateSearch.trim() !== "";
-                          const filtered = isSearching
-                            ? templates.filter((t: any) => {
-                                const title = language === "ru" ? String(t.title ?? "") : String((t as any).titleEn ?? t.title ?? "");
-                                const search = actTemplateSearch.toLowerCase();
-                                return title.toLowerCase().includes(search) || String(t.code ?? "").toLowerCase().includes(search);
-                              })
-                            : templates;
-                          if (filtered.length === 0) return null;
-                          const isCollapsed = !isSearching && collapsedCategories.has(categoryKey);
-                          return (
-                            <div key={categoryKey}>
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-between px-3 py-3 hover:bg-accent rounded-sm cursor-pointer"
-                                onClick={() => {
-                                  if (isSearching) return;
-                                  setCollapsedCategories((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(categoryKey)) next.delete(categoryKey);
-                                    else next.add(categoryKey);
-                                    return next;
-                                  });
-                                }}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {!isSearching && (
-                                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0", isCollapsed && "-rotate-90")} />
-                                  )}
-                                  <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
-                                    {catLabel}
-                                  </span>
-                                </div>
-                                <Badge variant="secondary" className="text-xs h-5 px-1.5 py-0 leading-none">
-                                  {filtered.length}
-                                </Badge>
-                              </button>
-                              {!isCollapsed && filtered.map((tpl: any) => (
-                                <CommandItem
-                                  key={tpl.id}
-                                  value={String(tpl.id)}
-                                  onSelect={(val) => {
-                                    setEditActTemplateId(val === editActTemplateId ? "" : val);
-                                    setActTemplatePopoverOpen(false);
-                                    setActTemplateSearch("");
-                                  }}
-                                  className="pl-4 py-2 items-start min-h-10"
-                                >
-                                  <Check className={cn("mr-2 h-4 w-4 shrink-0 mt-0.5", editActTemplateId === String(tpl.id) ? "opacity-100" : "opacity-0")} />
-                                  <span className="font-mono text-xs text-muted-foreground mr-2 shrink-0 mt-0.5">{String(tpl.code ?? "")}</span>
-                                  <span className="whitespace-normal leading-snug break-words">{language === "ru" ? String(tpl.title ?? "") : String((tpl as any).titleEn ?? tpl.title ?? "")}</span>
-                                </CommandItem>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    navigate("/select-act-template", { 
+                      state: { currentTemplateId: editActTemplateId } 
+                    });
+                  }}
+                  className="w-full justify-between font-normal h-9 px-3 text-sm"
+                >
+                  <span className={cn("truncate", !selectedActTemplate && "text-muted-foreground")}>
+                    {selectedActTemplate
+                      ? `${String(selectedActTemplate.code ?? "")} — ${language === "ru" ? String(selectedActTemplate.title ?? "") : String((selectedActTemplate as any).titleEn ?? selectedActTemplate.title ?? "")}`
+                      : (language === "ru" ? "Выбрать тип акта" : "Select act type")}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
                 <div className="text-xs text-muted-foreground">
                   {language === "ru"
                     ? "При смене типа акта он будет применён ко всем задачам с тем же номером акта."
@@ -1353,19 +1239,35 @@ export default function Schedule() {
 
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === "ru" ? "Материалы задачи (п.3 АОСР)" : "Task materials (AOSR p.3)"}</label>
-                {taskMaterialsQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {language === "ru" ? "Загрузка материалов..." : "Loading materials..."}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (selectedTask) {
+                      navigate("/select-task-materials", {
+                        state: { taskId: selectedTask.id }
+                      });
+                    }
+                  }}
+                  className="w-full justify-start h-auto py-3 px-4"
+                >
+                  <Package className="h-4 w-4 mr-2 shrink-0" />
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-medium">
+                      {language === "ru" ? "Управление материалами" : "Manage Materials"}
+                    </div>
+                    {taskMaterialsQuery.isLoading ? (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        {language === "ru" ? "Загрузка..." : "Loading..."}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {taskMaterialsQuery.data?.length ?? 0}{" "}
+                        {language === "ru" ? "материалов" : "materials"}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <TaskMaterialsEditor
-                    items={editMaterials}
-                    projectMaterials={projectMaterialOptions}
-                    onChange={setEditMaterials}
-                    disabled={replaceTaskMaterials.isPending}
-                  />
-                )}
+                </Button>
               </div>
 
               <div className="grid gap-2">

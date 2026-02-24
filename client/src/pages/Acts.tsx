@@ -287,6 +287,7 @@ export default function Acts() {
           language === "ru"
             ? `Создано: ${data.created}, обновлено: ${data.updated}, удалено: ${data.deletedActNumbers?.length ?? 0}. Предупреждений: ${data.warnings?.length ?? 0}`
             : `Created: ${data.created}, updated: ${data.updated}, deleted: ${data.deletedActNumbers?.length ?? 0}. Warnings: ${data.warnings?.length ?? 0}`,
+        duration: 3500,
       });
     },
   });
@@ -307,6 +308,7 @@ export default function Acts() {
         toast({
           title: language === "ru" ? "Успех" : "Success",
           description: language === "ru" ? `Создано ${exportResult.files.length} PDF-документов` : `Generated ${exportResult.files.length} PDF documents`,
+          duration: 3500,
         });
         exportResult.files.forEach((file: { url: string; filename: string }) => openPdfDownload(file.url, file.filename));
       }
@@ -338,6 +340,7 @@ export default function Acts() {
         toast({
           title: language === "ru" ? "Успех" : "Success",
           description: language === "ru" ? `Создано ${exportResult.files.length} PDF-документов` : `Generated ${exportResult.files.length} PDF documents`,
+          duration: 3500,
         });
 
         exportResult.files.forEach((file: { url: string; filename: string }) => openPdfDownload(file.url, file.filename));
@@ -409,6 +412,7 @@ export default function Acts() {
               toast({
                 title: language === "ru" ? "Синхронизация" : "Sync",
                 description: language === "ru" ? "Формирование актов из графика..." : "Generating acts from schedule...",
+                duration: 3500,
               });
               await generateActsFromSchedule.mutateAsync();
             }}

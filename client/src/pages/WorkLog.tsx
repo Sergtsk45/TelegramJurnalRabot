@@ -203,219 +203,239 @@ export default function WorkLog() {
 
         {/* ── РАЗДЕЛ 3 (список как в референсе) ──────────────────────── */}
         {activeTab === "section3" && (
-          <>
-            {/* Info-badge */}
-            <div className="flex items-center justify-between px-4 py-2 bg-primary/5 border-b border-primary/10">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-[10px] text-primary font-bold">i</span>
-                </div>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
-                  {t.section3.title}
-                </span>
+          <ScrollArea className="h-full px-2 py-2">
+            <div className="max-w-6xl mx-auto">
+              <div className="text-center mb-4">
+                <h2 className="text-lg font-bold mb-2">{t.section3.title}</h2>
+                <p className="text-sm text-muted-foreground leading-tight px-2">
+                  {t.section3.subtitle}
+                </p>
               </div>
-              {rows.length > 0 && (
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                  {format(
-                    new Date(rows[rows.length - 1].date),
-                    language === "ru" ? "LLLL yyyy" : "MMM yyyy",
-                    { locale },
-                  ).toUpperCase()}
-                </span>
-              )}
-            </div>
+              <SectionActionBar actions={t.actions} sectionId="section3" />
+              
+              {/* Кнопка обновить */}
+              <div className="flex justify-end mb-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  className="shrink-0"
+                  data-testid="button-refresh-log"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  {t.refreshLog}
+                </Button>
+              </div>
 
-            {/* Кнопка обновить */}
-            <div className="flex justify-end px-4 py-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                className="shrink-0"
-                data-testid="button-refresh-log"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {t.refreshLog}
-              </Button>
-            </div>
-
+              <div className="overflow-x-auto border-2 border-foreground">
+                <table className="w-full border-collapse text-[10px]" data-testid="section3-table">
+                  <thead>
+                    <tr>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top w-6 italic">
+                        {t.section3.rowNumber}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section3.date}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section3.workConditions}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section3.workDescription}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section3.representative}
+                      </th>
+                    </tr>
+                    <tr>
+                      {["1", "2", "3", "4", "5"].map((n) => (
+                        <th key={n} className="border border-foreground px-0.5 py-0.5 text-[8px] font-bold text-center">{n}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
             {/* Загрузка */}
             {isLoading && (
-              <div className="flex justify-center items-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
-              </div>
+              <tr>
+                <td colSpan={5} className="border border-foreground px-2 py-20 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary/50 inline-block" />
+                </td>
+              </tr>
             )}
 
             {/* Пусто */}
             {!isLoading && rows.length === 0 && (
-              <div className="text-center py-16 opacity-60 px-6">
-                <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FileText className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="font-semibold text-lg mb-1">{t.noRecords}</h3>
-                <p className="text-sm text-muted-foreground">{t.noRecordsHint}</p>
-              </div>
+              <tr>
+                <td colSpan={5} className="border border-foreground px-6 py-16 text-center">
+                  <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-1">{t.noRecords}</h3>
+                  <p className="text-sm text-muted-foreground">{t.noRecordsHint}</p>
+                </td>
+              </tr>
             )}
 
-            {/* Список записей */}
-            {!isLoading && rows.length > 0 && (
-              <div>
-                {rows.map((row) => {
-                  const rowDate = new Date(row.date);
-                  const allProcessed = row.segments.every((s) => !s.isPending);
-                  const statusLabel = allProcessed
-                    ? language === "ru" ? "ПРИНЯТО" : "ACCEPTED"
-                    : language === "ru" ? "В РАБОТЕ" : "IN PROGRESS";
-                  const statusClass = allProcessed
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                    : "border-border text-muted-foreground bg-muted/40";
+            {/* Записи */}
+            {!isLoading && rows.length > 0 && rows.map((row, rowIndex) => {
+              const rowDate = new Date(row.date);
+              const allProcessed = row.segments.every((s) => !s.isPending);
+              
+              return (
+                <tr key={row.date} data-testid={`worklog-row-${row.date}`}>
+                  <td className="border border-foreground px-0.5 py-3 text-center align-top font-bold text-[9px]">
+                    {rowIndex + 1}
+                  </td>
+                  <td className="border border-foreground px-1 py-3 align-top text-[9px]">
+                    {formatDate(row.date)}
+                  </td>
+                  <td className="border border-foreground px-1 py-3 align-top text-[9px]">
+                    {/* Условия производства работ */}
+                    &nbsp;
+                  </td>
+                  <td className="border border-foreground px-1 py-3 align-top text-[9px]">
+                    {/* Наименование работ */}
+                    {row.segments.map((seg, segIdx) => {
+                      const isEditing = editingSegment?.sourceId === seg.sourceId;
 
-                  return (
-                    <div
-                      key={row.date}
-                      className="border-b border-border/40 last:border-b-0 px-4 py-3"
-                      data-testid={`worklog-row-${row.date}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Дата */}
-                        <div className="w-10 shrink-0 text-center">
-                          <div className="text-[15px] font-bold leading-tight">
-                            {format(rowDate, "d", { locale })}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground uppercase">
-                            {format(rowDate, "EEE", { locale })}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {format(rowDate, "LLL", { locale })}
-                          </div>
-                        </div>
-
-                        {/* Основной контент */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span
-                              className={cn(
-                                "text-[10px] font-medium uppercase px-2 py-0.5 rounded border",
-                                statusClass,
-                              )}
-                            >
-                              {statusLabel}
-                            </span>
-                            <button type="button" className="text-muted-foreground/60 p-0.5">
-                              <MoreVertical className="h-4 w-4" />
-                            </button>
-                          </div>
-
-                          {/* Сегменты */}
-                          <div className="space-y-1">
-                            {row.segments.map((seg, segIdx) => {
-                              const isEditing = editingSegment?.sourceId === seg.sourceId;
-
-                              if (isEditing) {
-                                return (
-                                  <div
-                                    key={`${seg.sourceType}-${seg.sourceId}-${segIdx}`}
-                                    className="space-y-2"
-                                  >
-                                    <Textarea
-                                      value={editingSegment.text}
-                                      onChange={(e) =>
-                                        setEditingSegment({
-                                          ...editingSegment,
-                                          text: e.target.value,
-                                        })
-                                      }
-                                      className="min-h-[60px] text-[13px] rounded-xl"
-                                      autoFocus
-                                    />
-                                    <div className="flex gap-2">
-                                      <Button
-                                        size="sm"
-                                        onClick={handleSaveEdit}
-                                        disabled={patchMessage.isPending}
-                                        className="h-7 rounded-lg"
-                                      >
-                                        <Check className="h-3 w-3 mr-1" />
-                                        {language === "ru" ? "Сохранить" : "Save"}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={handleCancelEdit}
-                                        disabled={patchMessage.isPending}
-                                        className="h-7 rounded-lg"
-                                      >
-                                        <X className="h-3 w-3 mr-1" />
-                                        {language === "ru" ? "Отмена" : "Cancel"}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                );
+                      if (isEditing) {
+                        return (
+                          <div key={`${seg.sourceType}-${seg.sourceId}-${segIdx}`} className="space-y-2 mb-2">
+                            <Textarea
+                              value={editingSegment.text}
+                              onChange={(e) =>
+                                setEditingSegment({
+                                  ...editingSegment,
+                                  text: e.target.value,
+                                })
                               }
-
-                              return (
-                                <p
-                                  key={`${seg.sourceType}-${seg.sourceId}-${segIdx}`}
-                                  className={cn(
-                                    "text-[13px] leading-snug",
-                                    seg.sourceType === "message" &&
-                                      "cursor-pointer hover:text-primary transition-colors",
-                                    seg.isPending && "italic text-muted-foreground",
-                                  )}
-                                  onClick={() =>
-                                    handleSegmentClick(
-                                      seg.sourceId,
-                                      seg.text,
-                                      !seg.isPending,
-                                      seg.sourceType,
-                                    )
-                                  }
-                                >
-                                  {seg.text}
-                                </p>
-                              );
-                            })}
+                              className="min-h-[60px] text-[11px] rounded-xl"
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={handleSaveEdit}
+                                disabled={patchMessage.isPending}
+                                className="h-7 rounded-lg text-[10px]"
+                              >
+                                <Check className="h-3 w-3 mr-1" />
+                                {language === "ru" ? "Сохранить" : "Save"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleCancelEdit}
+                                disabled={patchMessage.isPending}
+                                className="h-7 rounded-lg text-[10px]"
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                {language === "ru" ? "Отмена" : "Cancel"}
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                        );
+                      }
 
-            {/* Добавить новую запись */}
-            <div className="mx-4 my-3 border border-dashed border-primary/30 rounded-2xl p-4 bg-primary/[0.02]">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full border-2 border-primary/30 flex items-center justify-center shrink-0">
-                  <Plus className="h-4 w-4 text-primary/50" />
-                </div>
-                <div>
-                  <p className="text-[14px] font-medium text-primary/70">
-                    {language === "ru" ? "Добавить новую запись" : "Add new entry"}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    {language === "ru"
-                      ? "Вы можете внести сведения за прошедшие даты или обновить данные из чат-бота Telegram."
-                      : "You can add entries for past dates or update data from the Telegram chatbot."}
-                  </p>
-                </div>
+                      return (
+                        <p
+                          key={`${seg.sourceType}-${seg.sourceId}-${segIdx}`}
+                          className={cn(
+                            "mb-1 last:mb-0",
+                            seg.sourceType === "message" &&
+                              "cursor-pointer hover:text-primary transition-colors",
+                            seg.isPending && "italic text-muted-foreground",
+                          )}
+                          onClick={() =>
+                            handleSegmentClick(
+                              seg.sourceId,
+                              seg.text,
+                              !seg.isPending,
+                              seg.sourceType,
+                            )
+                          }
+                        >
+                          {seg.text}
+                        </p>
+                      );
+                    })}
+                  </td>
+                  <td className="border border-foreground px-1 py-3 align-top text-[9px]">
+                    {/* Подпись представителя */}
+                    &nbsp;
+                  </td>
+                </tr>
+              );
+            })}
+                  </tbody>
+                </table>
               </div>
             </div>
+          </ScrollArea>
+        )}
 
-            {/* Общий прогресс */}
-            <div className="flex items-center justify-between mx-4 my-3 px-4 py-3 bg-card border border-border/60 rounded-2xl">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  {language === "ru" ? "ОБЩИЙ ПРОГРЕСС" : "OVERALL PROGRESS"}
+        {/* ── ТИТУЛ ───────────────────────────────────────────────────── */}
+        {activeTab === "title" && (
+          <ScrollArea className="h-full px-2 py-4">
+            <SectionActionBar actions={t.actions} sectionId="title" />
+            <PlaceholderSection title={t.tabs.title} comingSoon={t.comingSoon} />
+          </ScrollArea>
+        )}
+
+        {/* ── РАЗДЕЛ 1 ────────────────────────────────────────────────── */}
+        {activeTab === "section1" && (
+          <ScrollArea className="h-full px-2 py-2">
+            <div className="max-w-6xl mx-auto">
+              <div className="text-center mb-4">
+                <h2 className="text-lg font-bold mb-2">{t.section1.title}</h2>
+                <p className="text-sm text-muted-foreground leading-tight px-2">
+                  {t.section1.subtitle}
                 </p>
-                <p className="text-[32px] font-bold leading-tight">{progress}%</p>
               </div>
-              <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center">
-                <Zap className="h-5 w-5 text-primary" />
+              <SectionActionBar actions={t.actions} sectionId="section1" />
+              <div className="overflow-x-auto border-2 border-foreground">
+                <table className="w-full border-collapse text-[10px]" data-testid="section1-table">
+                  <thead>
+                    <tr>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top w-6 italic">
+                        {t.section1.rowNumber}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.orgName}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.personInfo}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.startDate}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.endDate}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.representative}
+                      </th>
+                    </tr>
+                    <tr>
+                      {["1", "2", "3", "4", "5", "6"].map((n) => (
+                        <th key={n} className="border border-foreground px-0.5 py-0.5 text-[8px] font-bold text-center">{n}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3].map((i) => (
+                      <tr key={i}>
+                        <td className="border border-foreground px-0.5 py-3 text-center align-top font-bold text-[9px]">{i}</td>
+                        {Array.from({ length: 5 }).map((_, c) => (
+                          <td key={c} className="border border-foreground px-1 py-3 align-top text-[9px]">&nbsp;</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          </>
+          </ScrollArea>
         )}
 
         {/* ── ТИТУЛ ───────────────────────────────────────────────────── */}

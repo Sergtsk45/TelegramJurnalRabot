@@ -28,7 +28,6 @@ import {
   MoreVertical,
   Plus,
   Zap,
-  ArrowLeftRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ru, enUS } from "date-fns/locale";
@@ -75,17 +74,6 @@ function SectionActionBar({
   );
 }
 
-function HorizontalScrollHint({ text }: { text: string }) {
-  return (
-    <div className="flex justify-end px-1 pb-2">
-      <div className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground select-none">
-        <ArrowLeftRight className="h-3.5 w-3.5" />
-        <span>{text}</span>
-      </div>
-    </div>
-  );
-}
-
 /* ─── константы табов ──────────────────────────────────────────────── */
 
 const TABS = [
@@ -117,8 +105,6 @@ export default function WorkLog() {
   const { language } = useLanguageStore();
   const t = translations[language].worklog;
   const locale = language === "ru" ? ru : enUS;
-  const scrollHint = language === "ru" ? "Листайте влево/вправо" : "Swipe left/right";
-  const scrollHintTable = language === "ru" ? "Листайте таблицу влево/вправо" : "Swipe table left/right";
 
   const { data: currentObject } = useCurrentObject();
   const objectSubtitle = currentObject?.title
@@ -206,12 +192,9 @@ export default function WorkLog() {
               </button>
             ))}
           </div>
-          {/* Edge fade + hint for horizontal scroll */}
+          {/* Edge fade for horizontal scroll */}
           <div className="pointer-events-none absolute top-[2px] bottom-[2px] left-[2px] w-10 bg-gradient-to-r from-background to-transparent" />
           <div className="pointer-events-none absolute top-[2px] bottom-[2px] right-[2px] w-10 bg-gradient-to-l from-background to-transparent" />
-          <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground bg-background/75 px-2 py-0.5 rounded-full border border-border/50">
-            {scrollHint}
-          </div>
         </div>
       </div>
 
@@ -454,60 +437,46 @@ export default function WorkLog() {
                 </p>
               </div>
               <SectionActionBar actions={t.actions} sectionId="section1" />
-              <HorizontalScrollHint text={scrollHintTable} />
-              <div className="relative border-2 border-foreground rounded-md">
-                <div
-                  className="overflow-x-auto overscroll-x-contain touch-pan-x"
-                  style={{ WebkitOverflowScrolling: "touch" as any }}
-                >
-                  <table className="w-full min-w-[920px] border-collapse text-sm" data-testid="section1-table">
-                    <thead>
-                      <tr>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top w-12 italic">
-                          {t.section1.rowNumber}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section1.orgName}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section1.personInfo}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section1.startDate}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section1.endDate}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section1.representative}
-                        </th>
-                      </tr>
-                      <tr>
-                        {["1", "2", "3", "4", "5", "6"].map((n) => (
-                          <th
-                            key={n}
-                            className="border border-foreground px-1 py-1 text-xs font-normal text-center italic"
-                          >
-                            {n}
-                          </th>
+              <div className="overflow-x-auto border-2 border-foreground">
+                <table className="w-full border-collapse text-[10px]" data-testid="section1-table">
+                  <thead>
+                    <tr>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top w-6 italic">
+                        {t.section1.rowNumber}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.orgName}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.personInfo}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.startDate}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.endDate}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section1.representative}
+                      </th>
+                    </tr>
+                    <tr>
+                      {["1", "2", "3", "4", "5", "6"].map((n) => (
+                        <th key={n} className="border border-foreground px-0.5 py-0.5 text-[8px] font-bold text-center">{n}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3].map((i) => (
+                      <tr key={i}>
+                        <td className="border border-foreground px-0.5 py-3 text-center align-top font-bold text-[9px]">{i}</td>
+                        {Array.from({ length: 5 }).map((_, c) => (
+                          <td key={c} className="border border-foreground px-1 py-3 align-top text-[9px]">&nbsp;</td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {[0, 1, 2].map((i) => (
-                        <tr key={i}>
-                          {Array.from({ length: 6 }).map((_, c) => (
-                            <td key={c} className="border border-foreground px-2 py-6 align-top">
-                              &nbsp;
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="pointer-events-none absolute top-[2px] bottom-[2px] left-[2px] w-8 bg-gradient-to-r from-background to-transparent" />
-                <div className="pointer-events-none absolute top-[2px] bottom-[2px] right-[2px] w-8 bg-gradient-to-l from-background to-transparent" />
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </ScrollArea>
@@ -524,57 +493,43 @@ export default function WorkLog() {
                 </p>
               </div>
               <SectionActionBar actions={t.actions} sectionId="section2" />
-              <HorizontalScrollHint text={scrollHintTable} />
-              <div className="relative border-2 border-foreground rounded-md">
-                <div
-                  className="overflow-x-auto overscroll-x-contain touch-pan-x"
-                  style={{ WebkitOverflowScrolling: "touch" as any }}
-                >
-                  <table className="w-full min-w-[820px] border-collapse text-sm" data-testid="section2-table">
-                    <thead>
-                      <tr>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top w-12 italic">
-                          {t.section2.rowNumber}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section2.journalName}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section2.personInfo}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section2.transferDate}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section2.signature}
-                        </th>
-                      </tr>
-                      <tr>
-                        {["1", "2", "3", "4", "5"].map((n) => (
-                          <th
-                            key={n}
-                            className="border border-foreground px-1 py-1 text-xs font-normal text-center italic"
-                          >
-                            {n}
-                          </th>
+              <div className="overflow-x-auto border-2 border-foreground">
+                <table className="w-full border-collapse text-[10px]" data-testid="section2-table">
+                  <thead>
+                    <tr>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top w-6 italic">
+                        {t.section2.rowNumber}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section2.journalName}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section2.personInfo}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section2.transferDate}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section2.signature}
+                      </th>
+                    </tr>
+                    <tr>
+                      {["1", "2", "3", "4", "5"].map((n) => (
+                        <th key={n} className="border border-foreground px-0.5 py-0.5 text-[8px] font-bold text-center">{n}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3].map((i) => (
+                      <tr key={i}>
+                        <td className="border border-foreground px-0.5 py-3 text-center align-top font-bold text-[9px]">{i}</td>
+                        {Array.from({ length: 4 }).map((_, c) => (
+                          <td key={c} className="border border-foreground px-1 py-3 align-top text-[9px]">&nbsp;</td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {[0, 1, 2].map((i) => (
-                        <tr key={i}>
-                          {Array.from({ length: 5 }).map((_, c) => (
-                            <td key={c} className="border border-foreground px-2 py-6 align-top">
-                              &nbsp;
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="pointer-events-none absolute top-[2px] bottom-[2px] left-[2px] w-8 bg-gradient-to-r from-background to-transparent" />
-                <div className="pointer-events-none absolute top-[2px] bottom-[2px] right-[2px] w-8 bg-gradient-to-l from-background to-transparent" />
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </ScrollArea>
@@ -591,63 +546,49 @@ export default function WorkLog() {
                 </p>
               </div>
               <SectionActionBar actions={t.actions} sectionId="section4" />
-              <HorizontalScrollHint text={scrollHintTable} />
-              <div className="relative border-2 border-foreground rounded-md">
-                <div
-                  className="overflow-x-auto overscroll-x-contain touch-pan-x"
-                  style={{ WebkitOverflowScrolling: "touch" as any }}
-                >
-                  <table className="w-full min-w-[1080px] border-collapse text-sm" data-testid="section4-table">
-                    <thead>
-                      <tr>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top w-10 italic">
-                          {t.section4.rowNumber}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section4.controlInfo}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section4.defects}
-                        </th>
-                        <th className="border border-foreground px-1 py-2 text-xs font-normal text-center align-top w-12 italic">
-                          {t.section4.defectDeadline}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section4.controlSignature}
-                        </th>
-                        <th className="border border-foreground px-1 py-2 text-xs font-normal text-center align-top w-12 italic">
-                          {t.section4.defectFixDate}
-                        </th>
-                        <th className="border border-foreground px-2 py-2 text-xs font-normal text-center align-top italic">
-                          {t.section4.fixSignature}
-                        </th>
-                      </tr>
-                      <tr>
-                        {["1", "2", "3", "4", "5", "6", "7"].map((n) => (
-                          <th
-                            key={n}
-                            className="border border-foreground px-1 py-1 text-xs font-normal text-center italic"
-                          >
-                            {n}
-                          </th>
+              <div className="overflow-x-auto border-2 border-foreground">
+                <table className="w-full border-collapse text-[10px]" data-testid="section4-table">
+                  <thead>
+                    <tr>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top w-6 italic">
+                        {t.section4.rowNumber}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section4.controlInfo}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section4.defects}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section4.defectDeadline}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section4.controlSignature}
+                      </th>
+                      <th className="border border-foreground px-0.5 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section4.defectFixDate}
+                      </th>
+                      <th className="border border-foreground px-1 py-1 text-[8px] font-normal text-center align-top italic">
+                        {t.section4.fixSignature}
+                      </th>
+                    </tr>
+                    <tr>
+                      {["1", "2", "3", "4", "5", "6", "7"].map((n) => (
+                        <th key={n} className="border border-foreground px-0.5 py-0.5 text-[8px] font-bold text-center">{n}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3].map((i) => (
+                      <tr key={i}>
+                        <td className="border border-foreground px-0.5 py-3 text-center align-top font-bold text-[9px]">{i}</td>
+                        {Array.from({ length: 6 }).map((_, c) => (
+                          <td key={c} className="border border-foreground px-1 py-3 align-top text-[9px]">&nbsp;</td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {[0, 1, 2].map((i) => (
-                        <tr key={i}>
-                          {Array.from({ length: 7 }).map((_, c) => (
-                            <td key={c} className="border border-foreground px-2 py-6 align-top">
-                              &nbsp;
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="pointer-events-none absolute top-[2px] bottom-[2px] left-[2px] w-8 bg-gradient-to-r from-background to-transparent" />
-                <div className="pointer-events-none absolute top-[2px] bottom-[2px] right-[2px] w-8 bg-gradient-to-l from-background to-transparent" />
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </ScrollArea>

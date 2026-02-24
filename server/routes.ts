@@ -477,6 +477,67 @@ export async function registerRoutes(
     res.json(works);
   });
 
+  // Work Collections (Коллекции ВОР)
+  app.get(api.workCollections.list.path, async (_req, res) => {
+    const list = await storage.getWorkCollections();
+    return res.status(200).json(list);
+  });
+
+  app.get(api.workCollections.get.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+
+    const data = await storage.getWorkCollectionWithDetails(id);
+    if (!data) {
+      return res.status(404).json({ message: "Not found" });
+    }
+
+    return res.status(200).json(data);
+  });
+
+  app.post(api.workCollections.import.path, async (req, res) => {
+    try {
+      const input = api.workCollections.import.input.parse(req.body);
+      const result = await storage.importWorkCollection(input as any);
+      return res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Work collection import failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.delete(api.workCollections.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+
+    const resetScheduleRaw = (req.query as any)?.resetSchedule;
+    const resetSchedule = resetScheduleRaw === "1" || resetScheduleRaw === "true";
+
+    try {
+      const ok = await storage.deleteWorkCollection(id, { resetScheduleIfInUse: resetSchedule });
+      if (!ok) return res.status(404).json({ message: "Not found" });
+      const userId = req.telegramUser?.id ? String(req.telegramUser.id) : undefined;
+      await storage.clearMessages(userId);
+      return res.status(204).send();
+    } catch (err) {
+      if (err instanceof Error && err.message === "WORK_COLLECTION_IN_USE_BY_SCHEDULE") {
+        return res.status(409).json({
+          message:
+            "Нельзя удалить коллекцию ВОР: она используется как источник графика работ. Сначала смените источник графика или очистите/пересоздайте задачи графика.",
+        });
+      }
+      console.error("Work collection delete failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
   // Estimates (Сметы / ЛСР)
   app.get(api.estimates.list.path, async (_req, res) => {
     const list = await storage.getEstimates();

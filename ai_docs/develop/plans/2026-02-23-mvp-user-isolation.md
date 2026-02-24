@@ -2,7 +2,7 @@
 
 **Created:** 2026-02-23  
 **Orchestration:** orch-2026-02-23-mvp-isolation  
-**Status:** ⏳ Pending
+**Status:** ✅ Completed
 
 ---
 
@@ -18,11 +18,11 @@
 
 ## Tasks
 
-- [ ] MVP-001: Заменить hardcoded userId на Telegram userId (⏳ Pending)
-- [ ] MVP-002: Серверная фильтрация сообщений по userId (⏳ Pending)
-- [ ] MVP-003: Добавить objectId в messages + SQL-миграция (⏳ Pending)
-- [ ] MVP-004: Минимальные фильтры на экране /schedule (⏳ Pending)
-- [ ] MVP-005: Onboarding-баннер на главной странице (⏳ Pending)
+- [x] MVP-001: Заменить hardcoded userId на Telegram userId (✅ Completed)
+- [x] MVP-002: Серверная фильтрация сообщений по userId (✅ Completed)
+- [x] MVP-003: Добавить objectId в messages + SQL-миграция (✅ Completed)
+- [x] MVP-004: Минимальные фильтры на экране /schedule (✅ Completed)
+- [x] MVP-005: Onboarding-баннер на главной странице (✅ Completed)
 
 ---
 

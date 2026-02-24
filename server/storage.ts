@@ -4,6 +4,9 @@ import {
   objectParties,
   objectResponsiblePersons,
   works,
+  workCollections,
+  workSections,
+  workResources,
   estimates,
   estimateSections,
   estimatePositions,
@@ -33,6 +36,12 @@ import {
   type InsertAct,
   type InsertSchedule,
   type Work,
+  type WorkCollection,
+  type WorkSection,
+  type WorkResource,
+  type InsertWorkCollection,
+  type InsertWorkSection,
+  type InsertWorkResource,
   type Estimate,
   type EstimateSection,
   type EstimatePosition,
@@ -188,6 +197,29 @@ export interface IStorage {
   getWorksByIds(ids: number[]): Promise<Work[]>;
   clearWorks(options?: { resetScheduleIfInUse?: boolean }): Promise<void>;
   importWorks(items: InsertWork[], mode: "merge" | "replace"): Promise<{ created: number; updated: number }>;
+
+  // Work Collections (Коллекции ВОР)
+  getWorkCollections(): Promise<WorkCollection[]>;
+  getWorkCollection(id: number): Promise<WorkCollection | undefined>;
+  getWorkSections(collectionId: number): Promise<WorkSection[]>;
+  getWorksByCollection(collectionId: number): Promise<Work[]>;
+  getWorkResources(workIds: number[]): Promise<WorkResource[]>;
+  getWorkCollectionWithDetails(
+    collectionId: number
+  ): Promise<
+    | {
+        collection: WorkCollection;
+        sections: Array<WorkSection & { positions: Array<Work & { resources: WorkResource[] }> }>;
+      }
+    | undefined
+  >;
+  importWorkCollection(payload: {
+    collection: InsertWorkCollection;
+    sections: Array<Omit<InsertWorkSection, "workCollectionId">>;
+    positions: Array<Omit<InsertWork, "id" | "workCollectionId" | "sectionId"> & { sectionNumber?: string | null }>;
+    resources?: Array<Omit<InsertWorkResource, "workId"> & { positionCode: string }>;
+  }): Promise<{ collectionId: number; sections: number; positions: number; resources: number }>;
+  deleteWorkCollection(id: number, options?: { resetScheduleIfInUse?: boolean }): Promise<boolean>;
 
   // Estimates (Сметы / ЛСР)
   getEstimates(): Promise<Estimate[]>;
@@ -1246,6 +1278,210 @@ export class DatabaseStorage implements IStorage {
       }
 
       return { created, updated };
+    });
+  }
+
+  // Work Collections (Коллекции ВОР)
+  async getWorkCollections(): Promise<WorkCollection[]> {
+    return await db.select().from(workCollections).orderBy(desc(workCollections.createdAt));
+  }
+
+  async getWorkCollection(id: number): Promise<WorkCollection | undefined> {
+    const [wc] = await db.select().from(workCollections).where(eq(workCollections.id, id));
+    return wc;
+  }
+
+  async getWorkSections(collectionId: number): Promise<WorkSection[]> {
+    return await db
+      .select()
+      .from(workSections)
+      .where(eq(workSections.workCollectionId, collectionId))
+      .orderBy(asc(workSections.orderIndex));
+  }
+
+  async getWorksByCollection(collectionId: number): Promise<Work[]> {
+    return await db
+      .select()
+      .from(works)
+      .where(eq(works.workCollectionId, collectionId))
+      .orderBy(asc(works.orderIndex));
+  }
+
+  async getWorkResources(workIds: number[]): Promise<WorkResource[]> {
+    if (workIds.length === 0) return [];
+    return await db
+      .select()
+      .from(workResources)
+      .where(inArray(workResources.workId, workIds))
+      .orderBy(asc(workResources.orderIndex));
+  }
+
+  async getWorkCollectionWithDetails(
+    collectionId: number
+  ): Promise<
+    | {
+        collection: WorkCollection;
+        sections: Array<WorkSection & { positions: Array<Work & { resources: WorkResource[] }> }>;
+      }
+    | undefined
+  > {
+    const collection = await this.getWorkCollection(collectionId);
+    if (!collection) return undefined;
+
+    const [sections, positions] = await Promise.all([
+      this.getWorkSections(collectionId),
+      this.getWorksByCollection(collectionId),
+    ]);
+
+    const workIds = positions.map((p) => p.id);
+    const resources = await this.getWorkResources(workIds);
+
+    const resourcesByWorkId = new Map<number, WorkResource[]>();
+    for (const r of resources) {
+      const list = resourcesByWorkId.get(r.workId) ?? [];
+      list.push(r);
+      resourcesByWorkId.set(r.workId, list);
+    }
+
+    const positionsBySectionId = new Map<number | null, Array<Work & { resources: WorkResource[] }>>();
+    for (const p of positions) {
+      const sid = (p.sectionId ?? null) as number | null;
+      const list = positionsBySectionId.get(sid) ?? [];
+      list.push({ ...p, resources: resourcesByWorkId.get(p.id) ?? [] });
+      positionsBySectionId.set(sid, list);
+    }
+
+    const hydratedSections = sections.map((s) => ({
+      ...s,
+      positions: positionsBySectionId.get(s.id) ?? [],
+    }));
+
+    // Позиции без секции
+    const unsectioned = positionsBySectionId.get(null);
+    if (unsectioned && unsectioned.length > 0) {
+      hydratedSections.unshift({
+        id: 0,
+        workCollectionId: collectionId,
+        number: "0",
+        title: "Без раздела",
+        orderIndex: -1,
+        positions: unsectioned,
+      } as any);
+    }
+
+    return { collection, sections: hydratedSections };
+  }
+
+  async importWorkCollection(payload: {
+    collection: InsertWorkCollection;
+    sections: Array<Omit<InsertWorkSection, "workCollectionId">>;
+    positions: Array<Omit<InsertWork, "id" | "workCollectionId" | "sectionId"> & { sectionNumber?: string | null }>;
+    resources?: Array<Omit<InsertWorkResource, "workId"> & { positionCode: string }>;
+  }): Promise<{ collectionId: number; sections: number; positions: number; resources: number }> {
+    const { collection, sections, positions, resources = [] } = payload;
+
+    return await db.transaction(async (tx) => {
+      const [createdCollection] = await tx.insert(workCollections).values(collection).returning();
+
+      const sectionIdByNumber = new Map<string, number>();
+      let sectionCount = 0;
+      for (const s of sections) {
+        const [created] = await tx
+          .insert(workSections)
+          .values({ ...s, workCollectionId: createdCollection.id })
+          .returning();
+        sectionIdByNumber.set(created.number, created.id);
+        sectionCount++;
+      }
+
+      const workIdByCode = new Map<string, number>();
+      let positionCount = 0;
+      for (const p of positions) {
+        const sectionId =
+          p.sectionNumber && sectionIdByNumber.has(p.sectionNumber) ? sectionIdByNumber.get(p.sectionNumber)! : null;
+
+        const values: any = {
+          ...p,
+          workCollectionId: createdCollection.id,
+          sectionId,
+        };
+        delete values.sectionNumber;
+
+        const [created] = await tx.insert(works).values(values).returning();
+        workIdByCode.set(created.code, created.id);
+        positionCount++;
+      }
+
+      let resourceCount = 0;
+      for (const r of resources) {
+        const workId = workIdByCode.get(r.positionCode);
+        if (!workId) continue;
+
+        const values: any = {
+          ...r,
+          workId,
+        };
+        delete values.positionCode;
+
+        await tx.insert(workResources).values(values);
+        resourceCount++;
+      }
+
+      return {
+        collectionId: createdCollection.id,
+        sections: sectionCount,
+        positions: positionCount,
+        resources: resourceCount,
+      };
+    });
+  }
+
+  async deleteWorkCollection(id: number, options?: { resetScheduleIfInUse?: boolean }): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx.select({ id: workCollections.id }).from(workCollections).where(eq(workCollections.id, id));
+      if (!existing) return false;
+
+      // Check if collection is used as schedule source
+      // Since we don't have workCollectionId in schedules yet, just check if any works from this collection are referenced
+      const worksInCollection = await tx
+        .select({ id: works.id })
+        .from(works)
+        .where(eq(works.workCollectionId, id));
+      const workIds = worksInCollection.map(w => w.id);
+
+      if (workIds.length > 0) {
+        const tasksUsing = await tx
+          .select({ id: scheduleTasks.id })
+          .from(scheduleTasks)
+          .where(inArray(scheduleTasks.workId, workIds));
+        
+        if (tasksUsing.length > 0 && !options?.resetScheduleIfInUse) {
+          throw new Error("WORK_COLLECTION_IN_USE_BY_SCHEDULE");
+        }
+
+        // Reset schedules if requested
+        if (tasksUsing.length > 0 && options?.resetScheduleIfInUse) {
+          // Delete schedule tasks that reference works from this collection
+          await tx.delete(scheduleTasks).where(inArray(scheduleTasks.workId, workIds));
+          
+          // Clear worksData in affected acts
+          const affectedActs = await tx
+            .select({ id: acts.id, worksData: acts.worksData })
+            .from(acts);
+          
+          for (const act of affectedActs) {
+            const currentWorksData = (act.worksData as any[]) ?? [];
+            const filteredWorksData = currentWorksData.filter((w: any) => !workIds.includes(w.sourceId));
+            if (filteredWorksData.length !== currentWorksData.length) {
+              await tx.update(acts).set({ worksData: filteredWorksData as any }).where(eq(acts.id, act.id));
+            }
+          }
+        }
+      }
+
+      // Delete the collection (sections and works will cascade)
+      await tx.delete(workCollections).where(eq(workCollections.id, id));
+      return true;
     });
   }
 

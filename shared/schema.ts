@@ -92,15 +92,95 @@ export const objectResponsiblePersons = pgTable(
   })
 );
 
-// Bill of Quantities (Ведомость объемов работ)
-export const works = pgTable("works", {
+// Work Collections (Коллекции ВОР)
+export const workCollections = pgTable("work_collections", {
   id: serial("id").primaryKey(),
-  code: text("code").notNull(), // Code from BoQ
-  description: text("description").notNull(), // Work description
-  unit: text("unit").notNull(), // Unit of measurement
-  quantityTotal: numeric("quantity_total", { precision: 20, scale: 4 }), // Total planned quantity (numeric for floats)
-  synonyms: jsonb("synonyms").$type<string[]>(), // Normalized synonyms for matching
+  code: text("code"),
+  name: text("name").notNull(),
+  
+  objectName: text("object_name"),
+  region: text("region"),
+  
+  totalCost: numeric("total_cost", { precision: 20, scale: 4 }),
+  totalConstruction: numeric("total_construction", { precision: 20, scale: 4 }),
+  totalInstallation: numeric("total_installation", { precision: 20, scale: 4 }),
+  totalEquipment: numeric("total_equipment", { precision: 20, scale: 4 }),
+  totalOther: numeric("total_other", { precision: 20, scale: 4 }),
+  
+  createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const workSections = pgTable(
+  "work_sections",
+  {
+    id: serial("id").primaryKey(),
+    workCollectionId: integer("work_collection_id")
+      .notNull()
+      .references(() => workCollections.id, { onDelete: "cascade" }),
+    number: text("number").notNull(),
+    title: text("title").notNull(),
+    orderIndex: integer("order_index").notNull().default(0),
+  },
+  (t) => ({
+    collectionIdIdx: index("work_sections_collection_id_idx").on(t.workCollectionId),
+    collectionNumberUnique: uniqueIndex("work_sections_collection_number_uq").on(
+      t.workCollectionId,
+      t.number
+    ),
+  })
+);
+
+export const workResources = pgTable(
+  "work_resources",
+  {
+    id: serial("id").primaryKey(),
+    workId: integer("work_id")
+      .notNull()
+      .references(() => works.id, { onDelete: "cascade" }),
+    resourceCode: text("resource_code"),
+    resourceType: text("resource_type"),
+    name: text("name").notNull(),
+    unit: text("unit"),
+    quantity: numeric("quantity", { precision: 20, scale: 4 }),
+    quantityTotal: numeric("quantity_total", { precision: 20, scale: 4 }),
+    baseCostPerUnit: numeric("base_cost_per_unit", { precision: 20, scale: 4 }),
+    currentCostPerUnit: numeric("current_cost_per_unit", { precision: 20, scale: 4 }),
+    totalCurrentCost: numeric("total_current_cost", { precision: 20, scale: 4 }),
+    orderIndex: integer("order_index").notNull().default(0),
+  },
+  (t) => ({
+    workIdIdx: index("work_resources_work_id_idx").on(t.workId),
+  })
+);
+
+// Bill of Quantities (Ведомость объемов работ) — расширена для коллекций
+export const works = pgTable(
+  "works",
+  {
+    id: serial("id").primaryKey(),
+    workCollectionId: integer("work_collection_id").references(() => workCollections.id, {
+      onDelete: "set null",
+    }),
+    sectionId: integer("section_id").references(() => workSections.id, { onDelete: "set null" }),
+    
+    code: text("code").notNull(), // Code from BoQ
+    description: text("description").notNull(), // Work description
+    unit: text("unit").notNull(), // Unit of measurement
+    quantityTotal: numeric("quantity_total", { precision: 20, scale: 4 }), // Total planned quantity
+    synonyms: jsonb("synonyms").$type<string[]>(), // Normalized synonyms for matching
+    
+    lineNo: text("line_no"),
+    notes: text("notes"),
+    baseCostPerUnit: numeric("base_cost_per_unit", { precision: 20, scale: 4 }),
+    currentCostPerUnit: numeric("current_cost_per_unit", { precision: 20, scale: 4 }),
+    totalCurrentCost: numeric("total_current_cost", { precision: 20, scale: 4 }),
+    orderIndex: integer("order_index").notNull().default(0),
+  },
+  (t) => ({
+    collectionIdIdx: index("works_collection_id_idx").on(t.workCollectionId),
+    sectionIdIdx: index("works_section_id_idx").on(t.sectionId),
+  })
+);
 
 // Estimates (Сметы / ЛСР)
 export const estimates = pgTable("estimates", {
@@ -475,6 +555,8 @@ export const schedules = pgTable("schedules", {
   calendarStart: date("calendar_start"),
   // Source of works for this schedule: 'works' (BoQ) or 'estimate' (LSR/Estimate)
   sourceType: text("source_type").notNull().default("works"),
+  // If sourceType='works', this is the work collection ID
+  workCollectionId: integer("work_collection_id").references(() => workCollections.id, { onDelete: "set null" }),
   // If sourceType='estimate', this is the estimate ID
   estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
@@ -583,6 +665,9 @@ export const estimatePositionMaterialLinks = pgTable(
 // === SCHEMAS ===
 
 export const insertWorkSchema = createInsertSchema(works).omit({ id: true });
+export const insertWorkCollectionSchema = createInsertSchema(workCollections).omit({ id: true, createdAt: true });
+export const insertWorkSectionSchema = createInsertSchema(workSections).omit({ id: true });
+export const insertWorkResourceSchema = createInsertSchema(workResources).omit({ id: true });
 export const insertEstimateSchema = createInsertSchema(estimates).omit({ id: true, createdAt: true });
 export const insertEstimateSectionSchema = createInsertSchema(estimateSections).omit({ id: true });
 export const insertEstimatePositionSchema = createInsertSchema(estimatePositions).omit({ id: true });
@@ -621,6 +706,15 @@ export const actWorkItemSchema = z.object({
 
 export type Work = typeof works.$inferSelect;
 export type InsertWork = z.infer<typeof insertWorkSchema>;
+
+export type WorkCollection = typeof workCollections.$inferSelect;
+export type InsertWorkCollection = z.infer<typeof insertWorkCollectionSchema>;
+
+export type WorkSection = typeof workSections.$inferSelect;
+export type InsertWorkSection = z.infer<typeof insertWorkSectionSchema>;
+
+export type WorkResource = typeof workResources.$inferSelect;
+export type InsertWorkResource = z.infer<typeof insertWorkResourceSchema>;
 
 export type Estimate = typeof estimates.$inferSelect;
 export type InsertEstimate = z.infer<typeof insertEstimateSchema>;

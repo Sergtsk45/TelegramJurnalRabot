@@ -11,6 +11,8 @@ import {
   estimatePositionMaterialLinks,
   taskMaterials,
   insertWorkSchema,
+  insertWorkCollectionSchema,
+  insertWorkSectionSchema,
   insertEstimateSchema,
   insertEstimateSectionSchema,
   insertEstimatePositionSchema,
@@ -21,6 +23,8 @@ import {
   schedules,
   scheduleTasks,
   works,
+  workCollections,
+  workSections,
   estimates,
   estimateSections,
   estimatePositions,
@@ -482,6 +486,79 @@ export const api = {
           updated: z.number(),
         }),
         400: z.object({ message: z.string() }),
+      },
+    },
+  },
+  workCollections: {
+    list: {
+      method: "GET" as const,
+      path: "/api/work-collections",
+      responses: {
+        200: z.array(z.custom<typeof workCollections.$inferSelect>()),
+      },
+    },
+    get: {
+      method: "GET" as const,
+      path: "/api/work-collections/:id",
+      responses: {
+        200: z.object({
+          collection: z.custom<typeof workCollections.$inferSelect>(),
+          sections: z.array(z.any()),
+        }),
+        404: z.object({ message: z.string() }),
+      },
+    },
+    import: {
+      method: "POST" as const,
+      path: "/api/work-collections/import",
+      input: z.object({
+        collection: insertWorkCollectionSchema.extend({
+          code: z.string().nullable().optional(),
+          objectName: z.string().nullable().optional(),
+          region: z.string().nullable().optional(),
+          totalCost: z.string().nullable().optional(),
+          totalConstruction: z.string().nullable().optional(),
+          totalInstallation: z.string().nullable().optional(),
+          totalEquipment: z.string().nullable().optional(),
+          totalOther: z.string().nullable().optional(),
+        }),
+        sections: z.array(
+          insertWorkSectionSchema
+            .omit({ workCollectionId: true })
+            .extend({ orderIndex: z.number().int().optional().default(0) })
+        ),
+        positions: z.array(
+          insertWorkSchema
+            .omit({ workCollectionId: true, sectionId: true })
+            .extend({
+              sectionNumber: z.string().nullable().optional(),
+              lineNo: z.string().nullable().optional(),
+              notes: z.string().nullable().optional(),
+              baseCostPerUnit: z.string().nullable().optional(),
+              currentCostPerUnit: z.string().nullable().optional(),
+              totalCurrentCost: z.string().nullable().optional(),
+              orderIndex: z.number().int().optional().default(0),
+            })
+        ),
+      }),
+      responses: {
+        200: z.object({
+          collectionId: z.number(),
+          sections: z.number(),
+          positions: z.number(),
+        }),
+        400: z.object({ message: z.string() }),
+      },
+    },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/work-collections/:id",
+      // Optional query:
+      // - resetSchedule=1: if this collection is used as a schedule source, reset schedule
+      responses: {
+        204: z.any(),
+        404: z.object({ message: z.string() }),
+        409: z.object({ message: z.string() }),
       },
     },
   },

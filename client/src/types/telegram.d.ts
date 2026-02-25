@@ -208,6 +208,17 @@ interface TelegramWebAppPopupParams {
   }>;
 }
 
+type TelegramEventType =
+  | "themeChanged"
+  | "viewportChanged"
+  | "mainButtonClicked"
+  | "backButtonClicked"
+  | "settingsButtonClicked"
+  | "invoiceClosed"
+  | "popupClosed"
+  | "qrTextReceived"
+  | "clipboardTextReceived";
+
 /**
  * Main Telegram WebApp interface
  * The main object for interacting with the Telegram WebApp API
@@ -261,9 +272,9 @@ interface TelegramWebApp {
   /** True if vertical swipes to close or minimize the Mini App are enabled (Bot API 7.7+) */
   isVerticalSwipesEnabled: boolean;
   /** A method that sets the app event handler */
-  onEvent(eventType: string, eventHandler: () => void): void;
+  onEvent(eventType: TelegramEventType, eventHandler: () => void): void;
   /** A method that deletes a previously set event handler */
-  offEvent(eventType: string, eventHandler: () => void): void;
+  offEvent(eventType: TelegramEventType, eventHandler: () => void): void;
   /** A method used to send data to the bot */
   sendData(data: string): void;
   /** A method that opens a link in an external browser */

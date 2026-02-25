@@ -8,65 +8,51 @@
 import { useEffect, useCallback } from "react";
 
 interface BackButtonParams {
+  /** Обработчик нажатия — должна быть стабильная ссылка (useCallback) */
   onClick: () => void;
   isVisible?: boolean;
 }
 
 /**
- * Хук для управления кнопкой "Назад" Telegram MiniApp
- * 
+ * Хук для управления кнопкой "Назад" Telegram MiniApp.
+ *
+ * ВАЖНО: передавайте `onClick` как стабильную ссылку (через useCallback),
+ * иначе эффект будет перезапускаться на каждый рендер.
+ *
  * @example
  * ```tsx
- * const { showButton, hideButton } = useTelegramBackButton({
- *   onClick: () => navigate('/'),
- *   isVisible: true
- * });
- * 
- * // Динамическое управление
- * useEffect(() => {
- *   if (isEditMode) {
- *     showButton();
- *   } else {
- *     hideButton();
- *   }
- * }, [isEditMode, showButton, hideButton]);
+ * const handleBack = useCallback(() => navigate('/'), [navigate]);
+ * useTelegramBackButton({ onClick: handleBack, isVisible: true });
  * ```
  */
 export function useTelegramBackButton(params: BackButtonParams) {
   const { onClick, isVisible = true } = params;
 
-  const backButton = window.Telegram?.WebApp?.BackButton;
-
   useEffect(() => {
+    const backButton = window.Telegram?.WebApp?.BackButton;
     if (!backButton) return;
 
-    // Управление видимостью
     if (isVisible) {
       backButton.show();
     } else {
       backButton.hide();
     }
 
-    // Подписка на клик
     backButton.onClick(onClick);
 
-    // Очистка при размонтировании
     return () => {
       backButton.offClick(onClick);
       backButton.hide();
     };
-  }, [backButton, onClick, isVisible]);
+  }, [onClick, isVisible]);
 
   const showButton = useCallback(() => {
-    backButton?.show();
-  }, [backButton]);
+    window.Telegram?.WebApp?.BackButton?.show();
+  }, []);
 
   const hideButton = useCallback(() => {
-    backButton?.hide();
-  }, [backButton]);
+    window.Telegram?.WebApp?.BackButton?.hide();
+  }, []);
 
-  return {
-    showButton,
-    hideButton,
-  };
+  return { showButton, hideButton };
 }

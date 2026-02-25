@@ -16,9 +16,6 @@ export const TelegramThemeProvider = ({ children }: TelegramThemeProviderProps) 
   const { themeParams, colorScheme, isInTelegram } = useTelegram();
 
   useEffect(() => {
-    // Apply theme even in development mode (using mock data)
-    // if (!isInTelegram) return;
-
     const root = document.documentElement;
 
     if (themeParams.bg_color) {

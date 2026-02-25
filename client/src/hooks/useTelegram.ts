@@ -5,37 +5,21 @@
  * @created: 2026-02-20
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
-/**
- * Interface for the useTelegram hook return value
- */
 interface UseTelegramReturn {
-  /** The main Telegram WebApp object */
   WebApp: TelegramWebApp | null;
-  /** Current user data from Telegram */
   user: TelegramWebAppUser | null;
-  /** Raw initialization data string for server-side validation */
   initData: string;
-  /** Parsed initialization data object */
   initDataUnsafe: TelegramWebAppInitData | null;
-  /** Current theme parameters from Telegram */
   themeParams: TelegramWebAppThemeParams;
-  /** Current color scheme (light or dark) */
   colorScheme: "light" | "dark";
-  /** Whether the app is running inside Telegram */
   isInTelegram: boolean;
-  /** Platform on which the Web App is running */
   platform: string;
-  /** Whether the Web App is expanded to maximum height */
   isExpanded: boolean;
-  /** Current height of the visible area */
   viewportHeight: number;
 }
 
-/**
- * Mock data for development outside Telegram
- */
 const MOCK_USER: TelegramWebAppUser = {
   id: 123456789,
   first_name: "Dev",
@@ -61,74 +45,47 @@ const MOCK_INIT_DATA_UNSAFE: TelegramWebAppInitData = {
   hash: "mock_hash_for_development",
 };
 
-/**
- * React hook for accessing Telegram WebApp API
- * 
- * Provides access to:
- * - WebApp - main Telegram WebApp object
- * - user - current Telegram user data
- * - initData - raw initialization data for server validation
- * - themeParams - Telegram theme parameters
- * - colorScheme - current color scheme (light/dark)
- * 
- * Handles cases when the app is running outside Telegram (for development)
- * 
- * @example
- * ```tsx
- * function MyComponent() {
- *   const { user, colorScheme, isInTelegram } = useTelegram();
- *   
- *   if (!isInTelegram) {
- *     return <div>Please open this app in Telegram</div>;
- *   }
- *   
- *   return (
- *     <div>
- *       <h1>Hello, {user?.first_name}!</h1>
- *       <p>Theme: {colorScheme}</p>
- *     </div>
- *   );
- * }
- * ```
- */
+const isDev = import.meta.env.DEV;
+
 export function useTelegram(): UseTelegramReturn {
-  const [WebApp, setWebApp] = useState<TelegramWebApp | null>(null);
+  // Store the original WebApp object in a ref — preserves prototype methods
+  const tgRef = useRef<TelegramWebApp | null>(null);
+
   const [isInTelegram, setIsInTelegram] = useState(false);
+  const [themeParams, setThemeParams] = useState<TelegramWebAppThemeParams>({});
+  const [colorScheme, setColorScheme] = useState<"light" | "dark">("light");
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
-    // Check if Telegram WebApp is available
     const tg = window.Telegram?.WebApp;
 
     if (tg) {
-      setWebApp(tg);
+      tgRef.current = tg;
       setIsInTelegram(true);
+      setThemeParams({ ...tg.themeParams });
+      setColorScheme(tg.colorScheme);
+      setViewportHeight(tg.viewportHeight);
+      setIsExpanded(tg.isExpanded);
 
-      // Ensure WebApp is ready and expanded
-      tg.ready();
-      tg.expand();
-
-      // Listen for theme changes
       const handleThemeChanged = () => {
-        // Force re-render when theme changes
-        setWebApp({ ...tg });
+        setThemeParams({ ...tg.themeParams });
+        setColorScheme(tg.colorScheme);
+      };
+
+      const handleViewportChanged = () => {
+        setViewportHeight(tg.viewportHeight);
+        setIsExpanded(tg.isExpanded);
       };
 
       tg.onEvent("themeChanged", handleThemeChanged);
-
-      // Listen for viewport changes
-      const handleViewportChanged = () => {
-        setWebApp({ ...tg });
-      };
-
       tg.onEvent("viewportChanged", handleViewportChanged);
 
-      // Cleanup event listeners
       return () => {
         tg.offEvent("themeChanged", handleThemeChanged);
         tg.offEvent("viewportChanged", handleViewportChanged);
       };
     } else {
-      // Running outside Telegram (development mode)
       setIsInTelegram(false);
       console.warn(
         "Telegram WebApp is not available. Running in development mode with mock data."
@@ -136,29 +93,28 @@ export function useTelegram(): UseTelegramReturn {
     }
   }, []);
 
-  // Return actual Telegram data if available, otherwise return mock data for development
-  if (isInTelegram && WebApp) {
+  if (isInTelegram && tgRef.current) {
+    const tg = tgRef.current;
     return {
-      WebApp,
-      user: WebApp.initDataUnsafe.user || null,
-      initData: WebApp.initData,
-      initDataUnsafe: WebApp.initDataUnsafe,
-      themeParams: WebApp.themeParams,
-      colorScheme: WebApp.colorScheme,
+      WebApp: tg,
+      user: tg.initDataUnsafe.user || null,
+      initData: tg.initData,
+      initDataUnsafe: tg.initDataUnsafe,
+      themeParams,
+      colorScheme,
       isInTelegram: true,
-      platform: WebApp.platform,
-      isExpanded: WebApp.isExpanded,
-      viewportHeight: WebApp.viewportHeight,
+      platform: tg.platform,
+      isExpanded,
+      viewportHeight,
     };
   }
 
-  // Return mock data for development
   return {
     WebApp: null,
-    user: MOCK_USER,
+    user: isDev ? MOCK_USER : null,
     initData: "",
-    initDataUnsafe: MOCK_INIT_DATA_UNSAFE,
-    themeParams: MOCK_THEME_PARAMS,
+    initDataUnsafe: isDev ? MOCK_INIT_DATA_UNSAFE : null,
+    themeParams: isDev ? MOCK_THEME_PARAMS : {},
     colorScheme: "light",
     isInTelegram: false,
     platform: "unknown",
@@ -168,8 +124,8 @@ export function useTelegram(): UseTelegramReturn {
 }
 
 /**
- * Helper hook to access only the user data
- * 
+ * Хук для быстрого доступа к данным пользователя
+ *
  * @example
  * ```tsx
  * function UserGreeting() {
@@ -184,16 +140,16 @@ export function useTelegramUser(): TelegramWebAppUser | null {
 }
 
 /**
- * Helper hook to access theme parameters
- * 
+ * Хук для быстрого доступа к параметрам темы
+ *
  * @example
  * ```tsx
  * function ThemedButton() {
  *   const theme = useTelegramTheme();
  *   return (
- *     <button style={{ 
+ *     <button style={{
  *       backgroundColor: theme.button_color,
- *       color: theme.button_text_color 
+ *       color: theme.button_text_color
  *     }}>
  *       Click me
  *     </button>

@@ -387,6 +387,22 @@
 
 ---
 
+## [2026-02-20] - Code review и исправления Telegram WebApp интеграции
+
+### Исправлено
+- **`useTelegram.ts`** (критическое): хук переписан с `useState<TelegramWebApp>` на `useRef` — теперь ссылка на оригинальный объект SDK сохраняется, методы прототипа не теряются при событии `themeChanged`/`viewportChanged`. Реактивный state ограничен только `themeParams`, `colorScheme`, `viewportHeight`, `isExpanded`.
+- **`useTelegram.ts`** (среднее): mock-данные для разработки (`MOCK_USER`, `MOCK_THEME_PARAMS`) теперь возвращаются только при `import.meta.env.DEV`, а не в production-сборке.
+- **`use-telegram-back-button.ts`**, **`use-telegram-main-button.ts`** (среднее): получение `BackButton`/`MainButton` перенесено внутрь `useEffect` — устранён race condition при загрузке SDK. `useCallback`-и обращаются к `window.Telegram` напрямую.
+- **`use-telegram-haptic.ts`** (среднее): `HapticFeedback` читается внутри callback-а, `useCallback` без deps — нет захвата потенциально `undefined` замыкания.
+- **`use-telegram-main-button.ts`**: несколько отдельных вызовов `setText`/`setParams` объединены в один `setParams` вызов.
+- **`TelegramThemeProvider.tsx`**: удалены закомментированные строки.
+- **`telegram.d.ts`**: добавлен `TelegramEventType` union type; `onEvent`/`offEvent` принимают только валидные типы событий вместо `string`.
+
+### Добавлено
+- JSDoc в `use-telegram-back-button.ts` и `use-telegram-main-button.ts` с предупреждением о необходимости стабильных ссылок на `onClick` (через `useCallback`).
+
+---
+
 ## [2026-02-20] - Подключение Telegram WebApp SDK
 
 ### Добавлено

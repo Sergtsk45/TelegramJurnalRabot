@@ -9,6 +9,7 @@ import { useEffect, useCallback } from "react";
 
 interface MainButtonParams {
   text: string;
+  /** ВАЖНО: передавайте стабильную ссылку (useCallback), иначе эффект перезапускается каждый рендер */
   onClick: () => void;
   color?: string;
   textColor?: string;
@@ -18,21 +19,20 @@ interface MainButtonParams {
 }
 
 /**
- * Хук для управления главной кнопкой Telegram MiniApp
- * 
+ * Хук для управления главной кнопкой Telegram MiniApp.
+ *
  * @example
  * ```tsx
- * const { showButton, hideButton, setProgress } = useTelegramMainButton({
+ * const handleSave = useCallback(async () => {
+ *   setProgress(true);
+ *   await saveData();
+ *   setProgress(false);
+ * }, []);
+ *
+ * const { setProgress } = useTelegramMainButton({
  *   text: "Сохранить",
  *   onClick: handleSave,
- *   isActive: true,
- *   isVisible: true
  * });
- * 
- * // Показать прогресс
- * setProgress(true);
- * await saveData();
- * setProgress(false);
  * ```
  */
 export function useTelegramMainButton(params: MainButtonParams) {
@@ -46,28 +46,17 @@ export function useTelegramMainButton(params: MainButtonParams) {
     isProgressVisible = false,
   } = params;
 
-  const mainButton = window.Telegram?.WebApp?.MainButton;
-
   useEffect(() => {
+    const mainButton = window.Telegram?.WebApp?.MainButton;
     if (!mainButton) return;
 
-    // Настройка текста и цветов
-    mainButton.setText(text);
-    if (color) mainButton.setParams({ color });
-    if (textColor) mainButton.setParams({ text_color: textColor });
-
-    // Управление состоянием
-    if (isActive) {
-      mainButton.enable();
-    } else {
-      mainButton.disable();
-    }
-
-    if (isVisible) {
-      mainButton.show();
-    } else {
-      mainButton.hide();
-    }
+    mainButton.setParams({
+      text,
+      ...(color ? { color } : {}),
+      ...(textColor ? { text_color: textColor } : {}),
+      is_active: isActive,
+      is_visible: isVisible,
+    });
 
     if (isProgressVisible) {
       mainButton.showProgress();
@@ -75,50 +64,39 @@ export function useTelegramMainButton(params: MainButtonParams) {
       mainButton.hideProgress();
     }
 
-    // Подписка на клик
     mainButton.onClick(onClick);
 
-    // Очистка при размонтировании
     return () => {
       mainButton.offClick(onClick);
       mainButton.hide();
     };
-  }, [mainButton, text, onClick, color, textColor, isActive, isVisible, isProgressVisible]);
+  }, [text, onClick, color, textColor, isActive, isVisible, isProgressVisible]);
 
   const showButton = useCallback(() => {
-    mainButton?.show();
-  }, [mainButton]);
+    window.Telegram?.WebApp?.MainButton?.show();
+  }, []);
 
   const hideButton = useCallback(() => {
-    mainButton?.hide();
-  }, [mainButton]);
+    window.Telegram?.WebApp?.MainButton?.hide();
+  }, []);
 
   const setProgress = useCallback((visible: boolean) => {
-    if (visible) {
-      mainButton?.showProgress();
-    } else {
-      mainButton?.hideProgress();
-    }
-  }, [mainButton]);
+    const btn = window.Telegram?.WebApp?.MainButton;
+    if (visible) btn?.showProgress();
+    else btn?.hideProgress();
+  }, []);
 
   const enable = useCallback(() => {
-    mainButton?.enable();
-  }, [mainButton]);
+    window.Telegram?.WebApp?.MainButton?.enable();
+  }, []);
 
   const disable = useCallback(() => {
-    mainButton?.disable();
-  }, [mainButton]);
+    window.Telegram?.WebApp?.MainButton?.disable();
+  }, []);
 
   const setText = useCallback((newText: string) => {
-    mainButton?.setText(newText);
-  }, [mainButton]);
+    window.Telegram?.WebApp?.MainButton?.setText(newText);
+  }, []);
 
-  return {
-    showButton,
-    hideButton,
-    setProgress,
-    enable,
-    disable,
-    setText,
-  };
+  return { showButton, hideButton, setProgress, enable, disable, setText };
 }

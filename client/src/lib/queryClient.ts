@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { getTelegramInitData } from "./telegram";
+import { getBrowserAccessToken } from "./browser-access";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -22,6 +23,12 @@ function createHeaders(includeContentType: boolean): HeadersInit {
   const initData = getTelegramInitData();
   if (initData) {
     headers["X-Telegram-Init-Data"] = initData;
+  }
+
+  // Браузерный доступ (вне Telegram) по access-token
+  const accessToken = getBrowserAccessToken();
+  if (accessToken) {
+    headers["X-App-Access-Token"] = accessToken;
   }
   
   return headers;

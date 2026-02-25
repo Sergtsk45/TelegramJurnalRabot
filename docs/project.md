@@ -37,6 +37,10 @@
     - Клиент автоматически передаёт `initData` в заголовке `X-Telegram-Init-Data` (см. `client/src/lib/queryClient.ts`)
     - Данные пользователя привязываются к `telegramUserId` в таблице `objects`
     - Документация: `docs/telegram-auth-testing.md`, скрипт для тестирования: `scripts/generate-mock-initdata.js`
+    - **Доступ в браузере (вне Telegram)**:
+      - Если Telegram `initData` недоступен, сервер может принимать `X-App-Access-Token` (значение сверяется с `APP_ACCESS_TOKEN`).
+      - При валидном токене запросы выполняются от имени “псевдо-пользователя” (`telegramUserId = -1`) — это режим для ручной работы/отладки в браузере.
+      - Экран ввода токена: `/login` (`client/src/pages/Login.tsx`), токен хранится в localStorage и автоматически добавляется в заголовки запросов.
   - **Хуки**: 
     - `useTelegram()` — доступ к WebApp, user, initData, themeParams, colorScheme
     - `useTelegramMainButton()` — управление главной кнопкой действия (см. `docs/telegram-buttons-guide.md`)

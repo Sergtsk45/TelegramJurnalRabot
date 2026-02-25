@@ -92,7 +92,7 @@ export default function SelectTaskMaterials() {
       setHasUnsavedChanges(false);
       toast({
         title: t.saved,
-        duration: 2000,
+        duration: 1800,
       });
     } catch (err: any) {
       toast({

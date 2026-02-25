@@ -131,14 +131,20 @@ export function telegramAuthMiddleware(options: { required?: boolean } = { requi
   return (req: Request, res: Response, next: NextFunction) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
-    // В dev-режиме без токена можно пропустить валидацию
+    // Если токен не настроен:
+    // - при required=false (опциональная аутентификация) просто пропускаем запрос
+    // - при required=true — это ошибка конфигурации (кроме dev-режима)
     if (!botToken) {
+      if (options.required === false) {
+        next();
+        return;
+      }
       if (process.env.NODE_ENV === 'development') {
         console.warn('[TelegramAuth] TELEGRAM_BOT_TOKEN not set, skipping validation in development');
         next();
         return;
       }
-      
+
       console.error('[TelegramAuth] TELEGRAM_BOT_TOKEN not configured');
       res.status(500).json({ error: 'Server configuration error' });
       return;

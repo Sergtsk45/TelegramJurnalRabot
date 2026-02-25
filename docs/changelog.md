@@ -4,6 +4,13 @@
 ### Исправлено
 - `client/src/hooks/use-messages.ts`: все запросы к `/api/messages` теперь отправляют `X-Telegram-Init-Data` (нужно для `telegramAuth` в production); улучшено извлечение текста ошибки из ответа API (`message`/`error`/text).
 - `client/src/pages/Home.tsx`: при ошибке отправки в toast показывается деталь ошибки (если сервер вернул причину).
+- `server/routes.ts`: при сбое AI-нормализации сообщения больше не зависают в статусе “обрабатывается” — сообщение помечается обработанным без `normalizedData`.
+
+### Добавлено
+- Доступ к приложению в обычном браузере на production через access-token:
+  - `server/middleware/browserTokenAuth.ts`: заголовок `X-App-Access-Token` (значение сравнивается с `APP_ACCESS_TOKEN`).
+  - `client/src/pages/Login.tsx`, роут `/login`: экран ввода токена, сохранение в localStorage.
+  - `client/src/lib/queryClient.ts`, `client/src/hooks/use-messages.ts`, `client/src/hooks/use-admin.ts`: добавлен заголовок `X-App-Access-Token` при наличии токена.
 
 ---
 

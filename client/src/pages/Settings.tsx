@@ -6,7 +6,7 @@
  */
 
 import { cn } from "@/lib/utils";
-import { ChevronRight, Shield } from "lucide-react";
+import { ChevronRight, KeyRound, Shield } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ import { useLanguageStore, translations } from "@/lib/i18n";
 import { useAppSettings } from "@/lib/app-settings";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
+import { getBrowserAccessToken } from "@/lib/browser-access";
 
 export default function Settings() {
   const { language, setLanguage } = useLanguageStore();
@@ -22,6 +23,7 @@ export default function Settings() {
   const { user, isInTelegram } = useTelegram();
   const { toast } = useToast();
   const t = translations[language].settings;
+  const browserToken = getBrowserAccessToken();
 
   const fullName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
@@ -153,6 +155,33 @@ export default function Settings() {
               <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
             </div>
           </div>
+        </div>
+
+        {/* Секция: Доступ в браузере (вне Telegram) */}
+        <div className="px-4 pt-4 pb-1">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            {language === "ru" ? "ДОСТУП В БРАУЗЕРЕ" : "BROWSER ACCESS"}
+          </p>
+        </div>
+        <div className="mx-4 bg-card border border-border/60 rounded-2xl">
+          <Link href="/login">
+            <a className="flex items-center justify-between px-4 py-3.5 cursor-pointer">
+              <div className="flex items-center gap-3">
+                <KeyRound className="h-5 w-5 text-primary" />
+                <div className="flex flex-col">
+                  <p className="text-[15px]">
+                    {language === "ru" ? "Access-token" : "Access token"}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {browserToken
+                      ? (language === "ru" ? "Настроено" : "Configured")
+                      : (language === "ru" ? "Не задан" : "Not set")}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+            </a>
+          </Link>
         </div>
 
         {/* Admin Panel link — visible only in dev; in prod requires server-side admin check */}

@@ -11,6 +11,7 @@ import WorkLog from "@/pages/WorkLog";
 import Acts from "@/pages/Acts";
 import Schedule from "@/pages/Schedule";
 import Settings from "@/pages/Settings";
+import Login from "@/pages/Login";
 import SourceData from "@/pages/SourceData";
 import SourceMaterials from "@/pages/SourceMaterials";
 import SourceMaterialDetail from "@/pages/SourceMaterialDetail";
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/select-act-template" component={SelectActTemplate} />
       <Route path="/select-task-materials" component={SelectTaskMaterials} />
       <Route path="/settings" component={Settings} />
+      <Route path="/login" component={Login} />
       {/* Admin Panel */}
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/users" component={AdminUsers} />

@@ -17,6 +17,7 @@ import * as path from "path";
 import { telegramAuthMiddleware } from "./middleware/telegramAuth";
 import { requireAdmin } from "./middleware/adminAuth";
 import { adminStorage } from "./storage";
+import { browserTokenAuthMiddleware } from "./middleware/browserTokenAuth";
 
 function addDaysISO(dateStr: string, days: number): string {
   // Expect YYYY-MM-DD. Work in UTC to avoid timezone shifts.
@@ -92,13 +93,19 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // Telegram Auth Middleware (опционально в dev, обязательно в prod)
-  const telegramAuth = telegramAuthMiddleware({ 
-    required: process.env.NODE_ENV === 'production' 
-  });
+  // Auth Middleware:
+  // - Telegram (initData) when available
+  // - Browser access-token when running outside Telegram
+  const telegramAuthOptional = telegramAuthMiddleware({ required: false });
+  const browserTokenAuth = browserTokenAuthMiddleware();
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (req.telegramUser?.id) return next();
+    return res.status(401).json({ error: "Authentication required" });
+  };
+  const appAuth = [browserTokenAuth, telegramAuthOptional, requireAuth] as const;
   
   // Object (MVP: single current object)
-  app.get(api.object.current.path, telegramAuth, async (req, res) => {
+  app.get(api.object.current.path, ...appAuth, async (req, res) => {
     const obj = await storage.getOrCreateDefaultObject(req.telegramUser?.id);
     return res.status(200).json(obj);
   });
@@ -674,7 +681,7 @@ export async function registerRoutes(
   });
 
   // Messages
-  app.delete(api.messages.list.path, telegramAuth, async (req, res) => {
+  app.delete(api.messages.list.path, ...appAuth, async (req, res) => {
     const userId = req.telegramUser?.id
       ? String(req.telegramUser.id)
       : undefined;
@@ -682,7 +689,7 @@ export async function registerRoutes(
     return res.status(204).send();
   });
 
-  app.get(api.messages.list.path, telegramAuth, async (req, res) => {
+  app.get(api.messages.list.path, ...appAuth, async (req, res) => {
     const userId = req.telegramUser?.id
       ? String(req.telegramUser.id)
       : undefined;
@@ -690,7 +697,7 @@ export async function registerRoutes(
     res.json(messages);
   });
 
-  app.post(api.messages.create.path, telegramAuth, async (req, res) => {
+  app.post(api.messages.create.path, ...appAuth, async (req, res) => {
     try {
       const input = api.messages.create.input.parse(req.body);
       // В prod — берём userId из валидированного telegramUser, в dev — из тела запроса
@@ -718,8 +725,9 @@ export async function registerRoutes(
         res.status(201).json(updated);
       } catch (aiError) {
         console.error("AI Normalization failed:", aiError);
-        // Return original message if AI fails
-        res.status(201).json(message);
+        // Mark as processed without AI to avoid "infinite loading" in UI
+        const updated = await storage.updateMessageNormalized(message.id, null as any);
+        res.status(201).json(updated);
       }
 
     } catch (err) {
@@ -731,7 +739,7 @@ export async function registerRoutes(
   });
 
   // Messages: explicit processing endpoint (sync with shared/routes.ts)
-  app.post(api.messages.process.path, telegramAuth, async (req, res) => {
+  app.post(api.messages.process.path, ...appAuth, async (req, res) => {
     try {
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) {
@@ -749,8 +757,14 @@ export async function registerRoutes(
       }
 
       // Re-run normalization on demand (useful if initial processing failed)
-      const normalized = await normalizeWorkMessage(message.messageRaw);
-      await storage.updateMessageNormalized(message.id, normalized);
+      try {
+        const normalized = await normalizeWorkMessage(message.messageRaw);
+        await storage.updateMessageNormalized(message.id, normalized);
+      } catch (aiError) {
+        console.error("Message processing (AI) failed:", aiError);
+        // Mark as processed without AI to avoid "infinite loading" in UI
+        await storage.updateMessageNormalized(message.id, null as any);
+      }
 
       const updated = await storage.getMessage(message.id);
       return res.status(200).json(updated);
@@ -761,7 +775,7 @@ export async function registerRoutes(
   });
 
   // Messages: patch endpoint for inline editing
-  app.patch(api.messages.patch.path, telegramAuth, async (req, res) => {
+  app.patch(api.messages.patch.path, ...appAuth, async (req, res) => {
     try {
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) {
@@ -794,7 +808,7 @@ export async function registerRoutes(
   });
 
   // Worklog Section 3: combined view of messages and acts, grouped by date
-  app.get(api.worklog.section3.path, telegramAuth, async (req, res) => {
+  app.get(api.worklog.section3.path, ...appAuth, async (req, res) => {
     try {
       const showVolumes = req.query.showVolumes === "1";
       const userId = req.telegramUser?.id
@@ -2005,7 +2019,7 @@ export async function registerRoutes(
   // ADMIN API — protected by requireAdmin
   // ========================================
 
-  const adminAuth = [telegramAuth, requireAdmin] as const;
+  const adminAuth = [browserTokenAuth, telegramAuthOptional, requireAdmin] as const;
 
   // GET /api/admin/users — список всех пользователей
   app.get("/api/admin/users", ...adminAuth, async (_req, res) => {

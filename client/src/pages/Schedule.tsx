@@ -650,7 +650,7 @@ export default function Schedule() {
       toast({
         title: language === "ru" ? "Сохранено" : "Saved",
         description: language === "ru" ? "Данные задачи обновлены" : "Task data updated",
-        duration: 2000,
+        duration: 1800,
       });
     } catch (err: any) {
       toast({

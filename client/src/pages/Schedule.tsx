@@ -5,7 +5,7 @@
  * @created: 2026-01-17
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
@@ -68,6 +68,9 @@ export default function Schedule() {
   const patchTask = usePatchScheduleTask();
 
   const tasks: ScheduleTask[] = schedule?.tasks ?? [];
+  const tasksRef = useRef<ScheduleTask[]>(tasks);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
   const sourceType = schedule?.sourceType ?? 'works';
   const scheduleEstimateId = sourceType === "estimate" ? (schedule?.estimateId ?? null) : null;
 
@@ -96,7 +99,9 @@ export default function Schedule() {
   const [editOpen, setEditOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<ScheduleTask | null>(null);
   const [editStartDate, setEditStartDate] = useState<string>("");
-  const [editDurationDays, setEditDurationDays] = useState<number>(1);
+  const [editDurationDays, setEditDurationDays] = useState<string>("1");
+  const [pendingEditTaskId, setPendingEditTaskId] = useState<number | null>(null);
+  const [pendingEditTemplateId, setPendingEditTemplateId] = useState<string | null>(null);
   const [editActNumber, setEditActNumber] = useState<string>("");
   const [editActTemplateId, setEditActTemplateId] = useState<string>("");
   const [editQuantity, setEditQuantity] = useState<string>("");
@@ -132,18 +137,53 @@ export default function Schedule() {
 
   const taskMaterialsQuery = useTaskMaterials(selectedTask?.id);
 
-  // Handle return from SelectActTemplate page
+  // Handle return from SelectActTemplate / SelectTaskMaterials sub-pages
   useEffect(() => {
     const handlePopState = () => {
       const state = window.history.state;
+
+      // Check if returning from a sub-page (taskId was saved before navigate)
+      const savedTaskIdStr = sessionStorage.getItem("scheduleEditTaskId");
+      if (savedTaskIdStr) {
+        sessionStorage.removeItem("scheduleEditTaskId");
+        const savedTaskId = Number(savedTaskIdStr);
+
+        // Template selection result (only from SelectActTemplate)
+        let resolvedTemplateId: string | null | undefined = undefined;
+        if (state?.selectedTemplateId !== undefined) {
+          resolvedTemplateId = state.selectedTemplateId === null ? null : String(state.selectedTemplateId);
+          window.history.replaceState({}, document.title);
+        }
+
+        const currentTasks = tasksRef.current;
+        const task = currentTasks.find((t) => t.id === savedTaskId);
+        if (task) {
+          if (openEditRef.current) {
+            openEditRef.current(task, resolvedTemplateId);
+          } else {
+            // openEditRef not yet assigned (component just mounted) — defer
+            setPendingEditTaskId(savedTaskId);
+            if (resolvedTemplateId !== undefined) {
+              setPendingEditTemplateId(resolvedTemplateId);
+            }
+          }
+        } else {
+          // Tasks not loaded yet — defer until they are
+          setPendingEditTaskId(savedTaskId);
+          if (resolvedTemplateId !== undefined) {
+            setPendingEditTemplateId(resolvedTemplateId);
+          }
+        }
+        return;
+      }
+
+      // Legacy: SelectActTemplate return without savedTaskId (dialog was already open)
       if (state?.selectedTemplateId !== undefined) {
-        // User returned from SelectActTemplate with a selection
         if (state.selectedTemplateId === null) {
           setEditActTemplateId("");
         } else {
           setEditActTemplateId(String(state.selectedTemplateId));
         }
-        // Clear the state to prevent re-triggering
         window.history.replaceState({}, document.title);
       }
     };
@@ -151,9 +191,9 @@ export default function Schedule() {
     // Check immediately in case we just navigated back
     handlePopState();
 
-    // Also listen for popstate events
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const upsertLink = useUpsertEstimatePositionLink(scheduleId);
@@ -382,12 +422,17 @@ export default function Schedule() {
     return null;
   }, [selectedTask, editQuantity, tasks, worksById, estimatePositionsById]);
 
-  const openEdit = (task: ScheduleTask) => {
+  const openEditRef = useRef<((task: ScheduleTask, overrideTemplateId?: string | null) => void) | null>(null);
+
+  const openEdit = (task: ScheduleTask, overrideTemplateId?: string | null) => {
     setSelectedTask(task);
     setEditStartDate(String(task.startDate));
-    setEditDurationDays(Number(task.durationDays || 1));
+    setEditDurationDays(String(Number(task.durationDays || 1)));
     setEditActNumber(task.actNumber == null ? "" : String(task.actNumber));
-    setEditActTemplateId((task as any).actTemplateId == null ? "" : String((task as any).actTemplateId));
+    const rawTemplateId = overrideTemplateId !== undefined
+      ? (overrideTemplateId === null ? "" : String(overrideTemplateId))
+      : ((task as any).actTemplateId == null ? "" : String((task as any).actTemplateId));
+    setEditActTemplateId(rawTemplateId);
     const rawQty = (task as any).quantity;
     setEditQuantity(rawQty != null ? String(Number(rawQty)) : "");
     setEditUnit(String((task as any).unit ?? ""));
@@ -396,6 +441,21 @@ export default function Schedule() {
     setEditExecutiveSchemes(Array.isArray((task as any).executiveSchemes) ? ((task as any).executiveSchemes as any) : []);
     setEditOpen(true);
   };
+
+  useEffect(() => {
+    openEditRef.current = openEdit;
+  });
+
+  // Restore edit dialog when returning from sub-pages (SelectActTemplate, SelectTaskMaterials)
+  useEffect(() => {
+    if (pendingEditTaskId === null || tasks.length === 0) return;
+    const task = tasks.find((t) => t.id === pendingEditTaskId);
+    if (!task) return;
+    openEdit(task, pendingEditTemplateId);
+    setPendingEditTaskId(null);
+    setPendingEditTemplateId(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEditTaskId, tasks]);
 
   const handleBootstrap = async () => {
     try {
@@ -512,6 +572,16 @@ export default function Schedule() {
   const saveEdit = async () => {
     if (!selectedTask) return;
     try {
+      const durationTrimmed = editDurationDays.trim();
+      const durationNum = durationTrimmed === "" ? 1 : Number(durationTrimmed);
+      if (!Number.isFinite(durationNum) || durationNum < 1 || !Number.isInteger(durationNum)) {
+        toast({
+          title: t.errorTitle,
+          description: language === "ru" ? "Длительность должна быть целым числом ≥ 1" : "Duration must be an integer ≥ 1",
+          variant: "destructive",
+        });
+        return;
+      }
       const trimmed = editActNumber.trim();
       const nextActNumber = trimmed === "" ? null : Number(trimmed);
       if (trimmed !== "") {
@@ -563,7 +633,7 @@ export default function Schedule() {
         id: selectedTask.id,
         patch: {
           startDate: editStartDate,
-          durationDays: editDurationDays,
+          durationDays: durationNum,
           actNumber: nextActNumber,
           actTemplateId: nextActTemplateId,
           quantity: nextQuantity,
@@ -577,8 +647,11 @@ export default function Schedule() {
         scheduleId: scheduleId ?? undefined,
       });
 
-      setEditOpen(false);
-      setSelectedTask(null);
+      toast({
+        title: language === "ru" ? "Сохранено" : "Saved",
+        description: language === "ru" ? "Данные задачи обновлены" : "Task data updated",
+        duration: 2000,
+      });
     } catch (err: any) {
       toast({
         title: t.errorTitle,
@@ -1171,10 +1244,15 @@ export default function Schedule() {
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{t.durationDays}</label>
                   <Input
-                    type="number"
-                    min={1}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={editDurationDays}
-                    onChange={(e) => setEditDurationDays(Number(e.target.value || 1))}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/[^\d]/g, "");
+                      setEditDurationDays(digitsOnly);
+                    }}
+                    placeholder="1"
                   />
                 </div>
               </div>
@@ -1184,6 +1262,9 @@ export default function Schedule() {
                 <Button
                   variant="outline"
                   onClick={() => {
+                    if (selectedTask) {
+                      sessionStorage.setItem("scheduleEditTaskId", String(selectedTask.id));
+                    }
                     navigate("/select-act-template", { 
                       state: { currentTemplateId: editActTemplateId } 
                     });
@@ -1246,6 +1327,7 @@ export default function Schedule() {
                   variant="outline"
                   onClick={() => {
                     if (selectedTask) {
+                      sessionStorage.setItem("scheduleEditTaskId", String(selectedTask.id));
                       navigate("/select-task-materials", {
                         state: { taskId: selectedTask.id }
                       });
@@ -1302,15 +1384,18 @@ export default function Schedule() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setEditOpen(false)}>
+          <div className="flex flex-row gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => {
+              setEditOpen(false);
+              setSelectedTask(null);
+            }}>
               {t.cancel}
             </Button>
-            <Button onClick={saveEdit} disabled={patchTask.isPending}>
+            <Button className="flex-1" onClick={saveEdit} disabled={patchTask.isPending}>
               {patchTask.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {t.save}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -7,12 +7,24 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type SourceDataDto } from "@shared/routes";
+import { getTelegramInitData } from "../lib/telegram";
+import { getBrowserAccessToken } from "../lib/browser-access";
+
+function createHeaders(includeContentType = false): HeadersInit {
+  const headers: HeadersInit = {};
+  if (includeContentType) headers["Content-Type"] = "application/json";
+  const initData = getTelegramInitData();
+  if (initData) headers["X-Telegram-Init-Data"] = initData;
+  const accessToken = getBrowserAccessToken();
+  if (accessToken) headers["X-App-Access-Token"] = accessToken;
+  return headers;
+}
 
 export function useCurrentObject() {
   return useQuery({
     queryKey: [api.object.current.path],
     queryFn: async () => {
-      const res = await fetch(api.object.current.path, { credentials: "include" });
+      const res = await fetch(api.object.current.path, { credentials: "include", headers: createHeaders() });
       if (!res.ok) throw new Error("Failed to fetch current object");
       return api.object.current.responses[200].parse(await res.json());
     },
@@ -23,7 +35,7 @@ export function useSourceData() {
   return useQuery({
     queryKey: [api.object.getSourceData.path],
     queryFn: async () => {
-      const res = await fetch(api.object.getSourceData.path, { credentials: "include" });
+      const res = await fetch(api.object.getSourceData.path, { credentials: "include", headers: createHeaders() });
       if (!res.ok) throw new Error("Failed to fetch source data");
       return api.object.getSourceData.responses[200].parse(await res.json());
     },
@@ -36,7 +48,7 @@ export function useSaveSourceData() {
     mutationFn: async (data: SourceDataDto) => {
       const res = await fetch(api.object.putSourceData.path, {
         method: api.object.putSourceData.method,
-        headers: { "Content-Type": "application/json" },
+        headers: createHeaders(true),
         body: JSON.stringify(data),
         credentials: "include",
       });

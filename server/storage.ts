@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { db } from "./db";
 import {
   objects,
@@ -318,12 +319,42 @@ export interface IStorage {
         | "projectDrawings"
         | "normativeRefs"
         | "executiveSchemes"
+        | "independentMaterials"
       >
     >
   ): Promise<ScheduleTask | undefined>;
 
   getTasksByActNumber(scheduleId: number, actNumber: number): Promise<ScheduleTask[]>;
   updateActTemplateForActNumber(params: { scheduleId: number; actNumber: number; actTemplateId: number | null }): Promise<number>;
+
+  // Split task functionality
+  splitScheduleTask(params: {
+    taskId: number;
+    splitDate: string;
+    durationFirst?: number;
+    durationSecond?: number;
+    quantityFirst?: number | null;
+    quantitySecond?: number | null;
+    newActNumber?: number | null;
+    inherit?: {
+      materials?: boolean;
+      projectDrawings?: boolean;
+      normativeRefs?: boolean;
+      executiveSchemes?: boolean;
+    };
+  }): Promise<{ original: ScheduleTask; created: ScheduleTask }>;
+  
+  getSplitSiblings(taskId: number): Promise<ScheduleTask[]>;
+  
+  syncMaterialsAcrossSplitGroup(taskId: number, newMaterials: Array<Omit<InsertTaskMaterial, "taskId">>): Promise<void>;
+  
+  syncMaterialDeleteAcrossSplitGroup(taskId: number, materialId: number): Promise<void>;
+  
+  syncDocsAcrossSplitGroup(taskId: number, docFields: {
+    projectDrawings?: string | null;
+    normativeRefs?: string | null;
+    executiveSchemes?: Array<{ title: string; fileUrl?: string }> | null;
+  }): Promise<void>;
 
   // Task materials (materials linked to a specific schedule task)
   getTaskMaterials(
@@ -2169,6 +2200,7 @@ export class DatabaseStorage implements IStorage {
         | "executiveSchemes"
         | "quantity"
         | "unit"
+        | "independentMaterials"
       >
     >
   ): Promise<ScheduleTask | undefined> {
@@ -2185,6 +2217,7 @@ export class DatabaseStorage implements IStorage {
     if ("executiveSchemes" in patch) updateData.executiveSchemes = (patch.executiveSchemes ?? null) as any;
     if ("quantity" in patch) updateData.quantity = (patch.quantity != null ? String(patch.quantity) : null) as any;
     if ("unit" in patch) updateData.unit = patch.unit ?? null;
+    if ("independentMaterials" in patch) updateData.independentMaterials = patch.independentMaterials as any;
 
     if (Object.keys(updateData).length === 0) return undefined;
 
@@ -2543,6 +2576,337 @@ export class DatabaseStorage implements IStorage {
     }
 
     return result;
+  }
+
+  // === Split Task functionality ===
+
+  async splitScheduleTask(params: {
+    taskId: number;
+    splitDate: string;
+    durationFirst?: number;
+    durationSecond?: number;
+    quantityFirst?: number | null;
+    quantitySecond?: number | null;
+    newActNumber?: number | null;
+    inherit?: {
+      materials?: boolean;
+      projectDrawings?: boolean;
+      normativeRefs?: boolean;
+      executiveSchemes?: boolean;
+    };
+  }): Promise<{ original: ScheduleTask; created: ScheduleTask }> {
+    const {
+      taskId,
+      splitDate,
+      durationFirst,
+      durationSecond,
+      quantityFirst,
+      quantitySecond,
+      newActNumber,
+      inherit = {},
+    } = params;
+
+    return await db.transaction(async (tx) => {
+      // 1. Get original task
+      const [task] = await tx.select().from(scheduleTasks).where(eq(scheduleTasks.id, taskId));
+      if (!task) {
+        throw new Error("TASK_NOT_FOUND");
+      }
+
+      // 2. Validate splitDate is within task date range
+      const taskStartDate = new Date(task.startDate);
+      const splitDateObj = new Date(splitDate);
+      const taskEndDate = new Date(taskStartDate);
+      taskEndDate.setDate(taskEndDate.getDate() + (task.durationDays || 0));
+
+      if (splitDateObj <= taskStartDate || splitDateObj >= taskEndDate) {
+        throw new Error("SPLIT_DATE_OUT_OF_RANGE");
+      }
+
+      // 3. Validate quantities if provided
+      if (quantityFirst != null && quantitySecond != null) {
+        const originalQuantity = task.quantity ? parseFloat(task.quantity) : 0;
+        const sumQuantities = quantityFirst + quantitySecond;
+        
+        if (sumQuantities > originalQuantity) {
+          throw new Error("QUANTITY_SUM_EXCEEDS_ORIGINAL");
+        }
+      }
+
+      // 4. Calculate durations if not provided
+      const totalDuration = task.durationDays || 0;
+      const daysBetween = Math.floor((splitDateObj.getTime() - taskStartDate.getTime()) / (1000 * 60 * 60 * 24));
+      const calcDurationFirst = durationFirst !== undefined ? durationFirst : daysBetween;
+      const calcDurationSecond = durationSecond !== undefined ? durationSecond : totalDuration - daysBetween;
+
+      // 5. Generate or reuse splitGroupId
+      const groupId = task.splitGroupId || randomUUID();
+
+      // 6. Calculate splitIndex for new task
+      let maxSplitIndex = 0;
+      if (task.splitGroupId) {
+        const siblings = await tx
+          .select({ splitIndex: scheduleTasks.splitIndex })
+          .from(scheduleTasks)
+          .where(eq(scheduleTasks.splitGroupId, task.splitGroupId));
+        maxSplitIndex = Math.max(...siblings.map((s) => s.splitIndex ?? 0), 0);
+      }
+      const newSplitIndex = maxSplitIndex + 1;
+
+      // 7. Transaction operations:
+      // a. Update original task
+      const updateData: Partial<typeof scheduleTasks.$inferInsert> = {
+        durationDays: calcDurationFirst,
+        splitGroupId: groupId,
+        splitIndex: task.splitIndex ?? 0,
+      };
+      if (quantityFirst !== undefined) {
+        updateData.quantity = (quantityFirst != null ? String(quantityFirst) : null) as any;
+      }
+      const [updatedOriginal] = await tx
+        .update(scheduleTasks)
+        .set(updateData)
+        .where(eq(scheduleTasks.id, taskId))
+        .returning();
+
+      // b. Shift orderIndex for tasks after original
+      await tx
+        .update(scheduleTasks)
+        .set({ orderIndex: sql`${scheduleTasks.orderIndex} + 1` })
+        .where(and(eq(scheduleTasks.scheduleId, task.scheduleId), sql`${scheduleTasks.orderIndex} > ${task.orderIndex}`));
+
+      // c. Insert new task
+      const newTaskData: typeof scheduleTasks.$inferInsert = {
+        scheduleId: task.scheduleId,
+        workId: task.workId,
+        estimatePositionId: task.estimatePositionId,
+        startDate: splitDate,
+        durationDays: calcDurationSecond,
+        quantity: (quantitySecond != null ? String(quantitySecond) : task.quantity) as any,
+        unit: task.unit,
+        orderIndex: (task.orderIndex || 0) + 1,
+        actNumber: (newActNumber !== undefined ? newActNumber : null) as any,
+        actTemplateId: task.actTemplateId,
+        splitGroupId: groupId,
+        splitIndex: newSplitIndex,
+        independentMaterials: false,
+        titleOverride: task.titleOverride,
+        projectDrawings: inherit.projectDrawings ? task.projectDrawings : null,
+        normativeRefs: inherit.normativeRefs ? task.normativeRefs : null,
+        executiveSchemes: (inherit.executiveSchemes ? task.executiveSchemes : null) as any,
+      };
+
+      const [createdTask] = await tx.insert(scheduleTasks).values(newTaskData).returning();
+
+      // d. Copy materials if inherit.materials = true
+      if (inherit.materials) {
+        const materials = await tx
+          .select()
+          .from(taskMaterials)
+          .where(eq(taskMaterials.taskId, taskId))
+          .orderBy(asc(taskMaterials.orderIndex));
+
+        if (materials.length > 0) {
+          const materialValues = materials.map((m) => ({
+            taskId: createdTask.id,
+            projectMaterialId: m.projectMaterialId,
+            batchId: m.batchId,
+            qualityDocumentId: m.qualityDocumentId,
+            note: m.note,
+            orderIndex: m.orderIndex,
+          }));
+          await tx.insert(taskMaterials).values(materialValues as any);
+        }
+      }
+
+      return { original: updatedOriginal, created: createdTask };
+    });
+  }
+
+  async getSplitSiblings(taskId: number): Promise<ScheduleTask[]> {
+    const [task] = await db.select().from(scheduleTasks).where(eq(scheduleTasks.id, taskId));
+    if (!task) {
+      return [];
+    }
+
+    if (!task.splitGroupId) {
+      return [task];
+    }
+
+    return await db
+      .select()
+      .from(scheduleTasks)
+      .where(eq(scheduleTasks.splitGroupId, task.splitGroupId))
+      .orderBy(asc(scheduleTasks.splitIndex));
+  }
+
+  async syncMaterialsAcrossSplitGroup(
+    taskId: number,
+    newMaterials: Array<Omit<InsertTaskMaterial, "taskId">>
+  ): Promise<void> {
+    return await db.transaction(async (tx) => {
+      // Get task with splitGroupId
+      const [task] = await tx.select().from(scheduleTasks).where(eq(scheduleTasks.id, taskId));
+      if (!task || !task.splitGroupId) {
+        return;
+      }
+
+      // Find sibling tasks with independentMaterials = false (excluding current task)
+      const siblings = await tx
+        .select()
+        .from(scheduleTasks)
+        .where(
+          and(
+            eq(scheduleTasks.splitGroupId, task.splitGroupId),
+            eq(scheduleTasks.independentMaterials, false),
+            ne(scheduleTasks.id, taskId)
+          )
+        );
+
+      if (siblings.length === 0) {
+        return;
+      }
+
+      // For each sibling, add materials with deduplication
+      for (const sibling of siblings) {
+        // Get existing materials for sibling
+        const existingMaterials = await tx
+          .select()
+          .from(taskMaterials)
+          .where(eq(taskMaterials.taskId, sibling.id));
+
+        // Create deduplication keys: projectMaterialId + batchId (null treated as "null" string)
+        // This ensures that materials with same projectMaterialId and batchId (including both null)
+        // are treated as duplicates and not added again
+        const existingKeys = new Set(
+          existingMaterials.map((m) => `${m.projectMaterialId}_${m.batchId ?? "null"}`)
+        );
+
+        // Filter out materials that already exist
+        const materialsToAdd = newMaterials.filter((m) => {
+          const key = `${m.projectMaterialId}_${m.batchId ?? "null"}`;
+          return !existingKeys.has(key);
+        });
+
+        if (materialsToAdd.length > 0) {
+          // Get max orderIndex for sibling
+          const [maxOrder] = await tx
+            .select({ max: sql<number>`COALESCE(MAX(${taskMaterials.orderIndex}), -1)` })
+            .from(taskMaterials)
+            .where(eq(taskMaterials.taskId, sibling.id));
+
+          let nextOrderIndex = Number((maxOrder as any)?.max ?? -1) + 1;
+
+          const values = materialsToAdd.map((m) => ({
+            ...(m as any),
+            taskId: sibling.id,
+            orderIndex: nextOrderIndex++,
+          }));
+
+          await tx.insert(taskMaterials).values(values as any);
+        }
+      }
+    });
+  }
+
+  async syncMaterialDeleteAcrossSplitGroup(taskId: number, materialId: number): Promise<void> {
+    return await db.transaction(async (tx) => {
+      // Get the material being deleted to identify it
+      const [material] = await tx.select().from(taskMaterials).where(eq(taskMaterials.id, materialId));
+      if (!material) {
+        return;
+      }
+
+      // Get task with splitGroupId
+      const [task] = await tx.select().from(scheduleTasks).where(eq(scheduleTasks.id, taskId));
+      if (!task || !task.splitGroupId) {
+        return;
+      }
+
+      // Find sibling tasks with independentMaterials = false (excluding current task)
+      const siblings = await tx
+        .select()
+        .from(scheduleTasks)
+        .where(
+          and(
+            eq(scheduleTasks.splitGroupId, task.splitGroupId),
+            eq(scheduleTasks.independentMaterials, false),
+            ne(scheduleTasks.id, taskId)
+          )
+        );
+
+      if (siblings.length === 0) {
+        return;
+      }
+
+      // Delete matching materials from siblings
+      for (const sibling of siblings) {
+        await tx
+          .delete(taskMaterials)
+          .where(
+            and(
+              eq(taskMaterials.taskId, sibling.id),
+              eq(taskMaterials.projectMaterialId, material.projectMaterialId),
+              material.batchId
+                ? eq(taskMaterials.batchId, material.batchId)
+                : isNull(taskMaterials.batchId)
+            )
+          );
+      }
+    });
+  }
+
+  async syncDocsAcrossSplitGroup(
+    taskId: number,
+    docFields: {
+      projectDrawings?: string | null;
+      normativeRefs?: string | null;
+      executiveSchemes?: Array<{ title: string; fileUrl?: string }> | null;
+    }
+  ): Promise<void> {
+    return await db.transaction(async (tx) => {
+      // Get task with splitGroupId
+      const [task] = await tx.select().from(scheduleTasks).where(eq(scheduleTasks.id, taskId));
+      if (!task || !task.splitGroupId) {
+        return;
+      }
+
+      // Find sibling tasks with independentMaterials = false (excluding current task)
+      const siblings = await tx
+        .select()
+        .from(scheduleTasks)
+        .where(
+          and(
+            eq(scheduleTasks.splitGroupId, task.splitGroupId),
+            eq(scheduleTasks.independentMaterials, false),
+            ne(scheduleTasks.id, taskId)
+          )
+        );
+
+      if (siblings.length === 0) {
+        return;
+      }
+
+      // Build update data
+      const updateData: Partial<typeof scheduleTasks.$inferInsert> = {};
+      if ("projectDrawings" in docFields) {
+        updateData.projectDrawings = docFields.projectDrawings ?? null;
+      }
+      if ("normativeRefs" in docFields) {
+        updateData.normativeRefs = docFields.normativeRefs ?? null;
+      }
+      if ("executiveSchemes" in docFields) {
+        updateData.executiveSchemes = (docFields.executiveSchemes ?? null) as any;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        const siblingIds = siblings.map((s) => s.id);
+        await tx
+          .update(scheduleTasks)
+          .set(updateData)
+          .where(inArray(scheduleTasks.id, siblingIds));
+      }
+    });
   }
 }
 

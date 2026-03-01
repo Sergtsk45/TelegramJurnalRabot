@@ -32,6 +32,17 @@ function addDaysISO(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function differenceInDaysISO(dateStr1: string, dateStr2: string): number {
+  // Calculate difference in days between two YYYY-MM-DD dates
+  const d1 = new Date(`${dateStr1}T00:00:00Z`);
+  const d2 = new Date(`${dateStr2}T00:00:00Z`);
+  if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) {
+    throw new Error(`Invalid date: ${dateStr1} or ${dateStr2}`);
+  }
+  const diffTime = d2.getTime() - d1.getTime();
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}
+
 function eachDayInRange(start: string, end: string): string[] {
   const days: string[] = [];
   let current = start;
@@ -1671,12 +1682,155 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Schedule task not found" });
       }
 
+      // SPLIT-017: Sync docs across split group if needed
+      const updatedData = updated as any;
+      const hasDocChanges = 
+        input.projectDrawings !== undefined || 
+        input.normativeRefs !== undefined || 
+        input.executiveSchemes !== undefined;
+
+      if (hasDocChanges && updatedData.splitGroupId && !updatedData.independentMaterials) {
+        const docFields: {
+          projectDrawings?: string | null;
+          normativeRefs?: string | null;
+          executiveSchemes?: Array<{ title: string; fileUrl?: string }> | null;
+        } = {};
+
+        if (input.projectDrawings !== undefined) {
+          docFields.projectDrawings = input.projectDrawings;
+        }
+        if (input.normativeRefs !== undefined) {
+          docFields.normativeRefs = input.normativeRefs;
+        }
+        if (input.executiveSchemes !== undefined) {
+          docFields.executiveSchemes = input.executiveSchemes;
+        }
+
+        await storage.syncDocsAcrossSplitGroup(id, docFields);
+      }
+
       return res.status(200).json(updated);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
       console.error("Schedule task patch failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // SPLIT-015: Split schedule task into two tasks
+  app.post(api.scheduleTasks.split.path, ...appAuth, async (req, res) => {
+    try {
+      const taskId = Number(req.params.id);
+      if (!Number.isFinite(taskId) || taskId <= 0) {
+        return res.status(400).json({ message: "Invalid schedule task id" });
+      }
+
+      const input = api.scheduleTasks.split.input.parse(req.body);
+      
+      // Get the task to validate
+      const task = await storage.getScheduleTask(taskId);
+      if (!task) {
+        return res.status(404).json({ message: "Schedule task not found" });
+      }
+
+      const taskData = task as any;
+      const taskStartDate = taskData.startDate;
+      const taskDuration = taskData.durationDays || 0;
+      const taskEndDate = addDaysISO(taskStartDate, taskDuration);
+
+      // Validate splitDate is within task date range
+      if (input.splitDate <= taskStartDate || input.splitDate >= taskEndDate) {
+        return res.status(400).json({ 
+          message: `Split date must be between ${taskStartDate} and ${taskEndDate}` 
+        });
+      }
+
+      // Check actNumber conflict if newActNumber is provided
+      if (input.newActNumber) {
+        const scheduleId = taskData.scheduleId;
+        const tasksInTargetAct = await storage.getTasksByActNumber(scheduleId, input.newActNumber);
+        
+        // Check if any task in the target act is from a different split group
+        const conflictingTasks = tasksInTargetAct.filter((t: any) => {
+          const tSplitGroupId = t.splitGroupId;
+          const currentSplitGroupId = taskData.splitGroupId;
+          // Conflict if another split group already uses this actNumber
+          return tSplitGroupId && tSplitGroupId !== currentSplitGroupId;
+        });
+
+        if (conflictingTasks.length > 0) {
+          return res.status(409).json({ 
+            message: `Act number ${input.newActNumber} is already occupied by another split group` 
+          });
+        }
+      }
+
+      // Parse quantities if provided
+      let quantityFirst: number | null = null;
+      let quantitySecond: number | null = null;
+      
+      if (input.quantityFirst !== undefined) {
+        quantityFirst = parseFloat(input.quantityFirst);
+        if (isNaN(quantityFirst) || quantityFirst < 0) {
+          return res.status(400).json({ message: "Invalid quantityFirst" });
+        }
+      }
+      
+      if (input.quantitySecond !== undefined) {
+        quantitySecond = parseFloat(input.quantitySecond);
+        if (isNaN(quantitySecond) || quantitySecond < 0) {
+          return res.status(400).json({ message: "Invalid quantitySecond" });
+        }
+      }
+
+      // Call storage method - durations are calculated in storage layer
+      const result = await storage.splitScheduleTask({
+        taskId,
+        splitDate: input.splitDate,
+        quantityFirst,
+        quantitySecond,
+        newActNumber: input.newActNumber ?? null,
+        inherit: input.inherit,
+      });
+
+      return res.status(200).json(result);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      if (err.message === "TASK_NOT_FOUND") {
+        return res.status(404).json({ message: "Schedule task not found" });
+      }
+      if (err.message === "SPLIT_DATE_OUT_OF_RANGE") {
+        return res.status(400).json({ message: "Split date is out of task date range" });
+      }
+      if (err.message === "QUANTITY_SUM_EXCEEDS_ORIGINAL") {
+        return res.status(400).json({ message: "Sum of split quantities exceeds original task quantity" });
+      }
+      console.error("Split task failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // SPLIT-016: Get split siblings
+  app.get(api.scheduleTasks.splitSiblings.path, ...appAuth, async (req, res) => {
+    try {
+      const taskId = Number(req.params.id);
+      if (!Number.isFinite(taskId) || taskId <= 0) {
+        return res.status(400).json({ message: "Invalid schedule task id" });
+      }
+
+      const siblings = await storage.getSplitSiblings(taskId);
+      
+      if (siblings.length === 0) {
+        return res.status(404).json({ message: "Schedule task not found" });
+      }
+
+      return res.status(200).json(siblings);
+    } catch (err) {
+      console.error("Get split siblings failed:", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   });
@@ -1748,6 +1902,25 @@ export async function registerRoutes(
       }));
 
       await storage.replaceTaskMaterials(taskId, items as any);
+
+      // SPLIT-020: Sync entire material set to siblings if independentMaterials = false
+      const task = await storage.getScheduleTask(taskId);
+      if (task) {
+        const taskData = task as any;
+        if (taskData.splitGroupId && !taskData.independentMaterials) {
+          // Get siblings with independentMaterials = false
+          const siblings = await storage.getSplitSiblings(taskId);
+          const siblingsToSync = siblings.filter((s: any) => 
+            s.id !== taskId && !s.independentMaterials
+          );
+
+          // Replace materials for each sibling
+          for (const sibling of siblingsToSync) {
+            await storage.replaceTaskMaterials((sibling as any).id, items as any);
+          }
+        }
+      }
+
       const updated = await storage.getTaskMaterials(taskId);
       return res.status(200).json(updated as any);
     } catch (err) {
@@ -1767,13 +1940,24 @@ export async function registerRoutes(
       }
 
       const input = api.taskMaterials.add.input.parse(req.body);
-      const created = await storage.createTaskMaterial(taskId, {
+      const materialData = {
         projectMaterialId: Number(input.projectMaterialId),
         batchId: input.batchId == null ? null : Number(input.batchId),
         qualityDocumentId: input.qualityDocumentId == null ? null : Number(input.qualityDocumentId),
         note: input.note ?? null,
         orderIndex: input.orderIndex,
-      } as any);
+      };
+
+      const created = await storage.createTaskMaterial(taskId, materialData as any);
+
+      // SPLIT-018: Sync material to split siblings if needed
+      const task = await storage.getScheduleTask(taskId);
+      if (task) {
+        const taskData = task as any;
+        if (taskData.splitGroupId && !taskData.independentMaterials) {
+          await storage.syncMaterialsAcrossSplitGroup(taskId, [materialData as any]);
+        }
+      }
 
       return res.status(201).json(created as any);
     } catch (err) {
@@ -1792,8 +1976,25 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid material id" });
       }
 
+      // SPLIT-019: Get taskId before deletion for sync
+      const materials = await storage.getTaskMaterials(Number(req.params.id));
+      const material = materials.find((m: any) => m.id === materialId);
+      const taskId = material ? (material as any).taskId : null;
+
       const ok = await storage.deleteTaskMaterial(materialId);
       if (!ok) return res.status(404).json({ message: "Not found" });
+
+      // Sync deletion across split group if needed
+      if (taskId) {
+        const task = await storage.getScheduleTask(taskId);
+        if (task) {
+          const taskData = task as any;
+          if (taskData.splitGroupId && !taskData.independentMaterials) {
+            await storage.syncMaterialDeleteAcrossSplitGroup(taskId, materialId);
+          }
+        }
+      }
+
       return res.status(204).send();
     } catch (err) {
       console.error("Delete task material failed:", err);

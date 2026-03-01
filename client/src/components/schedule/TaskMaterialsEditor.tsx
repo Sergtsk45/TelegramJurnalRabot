@@ -28,8 +28,10 @@ export function TaskMaterialsEditor(props: {
   projectMaterials: ProjectMaterialOption[];
   onChange: (items: TaskMaterialEditorItem[]) => void;
   disabled?: boolean;
+  independentMaterials?: boolean;
+  siblingsCount?: number;
 }) {
-  const { items, projectMaterials, onChange, disabled } = props;
+  const { items, projectMaterials, onChange, disabled, independentMaterials = false, siblingsCount = 0 } = props;
   const [newProjectMaterialId, setNewProjectMaterialId] = useState<string>("");
   const [newBatchId, setNewBatchId] = useState<string>("");
   const [newQualityDocumentId, setNewQualityDocumentId] = useState<string>("");
@@ -78,6 +80,23 @@ export function TaskMaterialsEditor(props: {
 
   return (
     <div className="space-y-3">
+      {/* Sync Indicator */}
+      {siblingsCount > 0 && (
+        <div className="rounded-md border p-3 bg-muted/20">
+          <div className="text-xs text-muted-foreground">
+            {independentMaterials ? (
+              <>
+                <span className="font-medium text-foreground">Независимые материалы:</span> Материалы только для этой задачи
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-foreground">Синхронизация:</span> Материалы синхронизируются между {siblingsCount} разделёнными задачами
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
         {items.length === 0 ? (
           <div className="text-sm text-muted-foreground">Материалы не выбраны</div>

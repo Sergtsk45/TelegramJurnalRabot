@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguageStore, translations } from "@/lib/i18n";
 import { useWorks } from "@/hooks/use-works";
@@ -31,17 +33,33 @@ import {
   usePatchScheduleTask, 
   useSchedule,
   useScheduleSourceInfo,
+  useSplitScheduleTask,
+  useSplitSiblings,
 } from "@/hooks/use-schedules";
 import { useActTemplates } from "@/hooks/use-act-templates";
 import { useReplaceTaskMaterials, useTaskMaterials } from "@/hooks/use-task-materials";
 import { useCurrentObject } from "@/hooks/use-source-data";
 import { useProjectMaterials } from "@/hooks/use-materials";
 import { ExecutiveSchemesEditor, type ExecutiveSchemeItem } from "@/components/schedule/ExecutiveSchemesEditor";
+import { SplitTaskDialog } from "@/components/schedule/SplitTaskDialog";
 import type { ScheduleTask, Work } from "@shared/schema";
-import { Loader2, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, AlertTriangle, ChevronsUpDown, Check, MoreVertical, Package } from "lucide-react";
+import { Loader2, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, AlertTriangle, ChevronsUpDown, Check, MoreVertical, Package, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { ru, enUS } from "date-fns/locale";
+
+// Helper: Generate consistent color for split task group
+function getSplitTaskColor(splitGroupId: string | null | undefined): string | null {
+  if (!splitGroupId) return null;
+  
+  let hash = 0;
+  for (let i = 0; i < splitGroupId.length; i++) {
+    hash = splitGroupId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+}
 
 export default function Schedule() {
   const [, navigate] = useLocation();
@@ -66,6 +84,7 @@ export default function Schedule() {
   const changeSource = useChangeScheduleSource(scheduleId);
   const { data: sourceInfo } = useScheduleSourceInfo(scheduleId);
   const patchTask = usePatchScheduleTask();
+  const splitTask = useSplitScheduleTask(scheduleId);
 
   const tasks: ScheduleTask[] = schedule?.tasks ?? [];
   const tasksRef = useRef<ScheduleTask[]>(tasks);
@@ -82,6 +101,33 @@ export default function Schedule() {
     if (taskFilter === 'without-act') return tasks.filter((t) => !t.actNumber);
     return tasks;
   }, [tasks, taskFilter]);
+
+  const splitTasksInfo = useMemo(() => {
+    const groupedBySplitId = new Map<string, ScheduleTask[]>();
+    for (const task of tasks) {
+      const splitGroupId = task.splitGroupId;
+      if (splitGroupId) {
+        if (!groupedBySplitId.has(splitGroupId)) {
+          groupedBySplitId.set(splitGroupId, []);
+        }
+        groupedBySplitId.get(splitGroupId)!.push(task);
+      }
+    }
+
+    const taskSplitInfo = new Map<number, { position: number; total: number }>();
+    for (const [splitGroupId, siblings] of groupedBySplitId.entries()) {
+      const sorted = siblings.sort((a, b) => {
+        const indexA = a.splitIndex ?? 0;
+        const indexB = b.splitIndex ?? 0;
+        return indexA - indexB;
+      });
+      sorted.forEach((task, idx) => {
+        taskSplitInfo.set(task.id, { position: idx + 1, total: sorted.length });
+      });
+    }
+
+    return taskSplitInfo;
+  }, [tasks]);
 
   const [changeSourceDialogOpen, setChangeSourceDialogOpen] = useState(false);
   const [confirmationInput, setConfirmationInput] = useState("");
@@ -109,6 +155,7 @@ export default function Schedule() {
   const [editProjectDrawings, setEditProjectDrawings] = useState<string>("");
   const [editNormativeRefs, setEditNormativeRefs] = useState<string>("");
   const [editExecutiveSchemes, setEditExecutiveSchemes] = useState<ExecutiveSchemeItem[]>([]);
+  const [editIndependentMaterials, setEditIndependentMaterials] = useState<boolean>(false);
   
   // Act type conflict dialog state
   const [actConflictDialogOpen, setActConflictDialogOpen] = useState(false);
@@ -118,6 +165,10 @@ export default function Schedule() {
     otherTasksCount: number;
     conflictKind?: "actNumberAssign" | "actNumberChange" | "templateChange";
   } | null>(null);
+
+  // Split task dialog state
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [taskToSplit, setTaskToSplit] = useState<ScheduleTask | null>(null);
 
   const { data: estimates = [] } = useEstimates();
   const activeEstimateId = scheduleEstimateId;
@@ -393,7 +444,7 @@ export default function Schedule() {
     // Sum of all tasks with the same source (excluding current task, adding new value)
     const totalOthers = tasks
       .filter((t) => t.id !== selectedTask.id && (t.workId ?? t.estimatePositionId) === sourceId)
-      .reduce((sum, t) => sum + (((t as any).quantity != null) ? Number((t as any).quantity) : 0), 0);
+      .reduce((sum, t) => sum + ((t.quantity != null) ? Number(t.quantity) : 0), 0);
     const totalNew = totalOthers + newQty;
 
     // Reference quantity from source
@@ -428,14 +479,15 @@ export default function Schedule() {
     setEditActNumber(task.actNumber == null ? "" : String(task.actNumber));
     const rawTemplateId = overrideTemplateId !== undefined
       ? (overrideTemplateId === null ? "" : String(overrideTemplateId))
-      : ((task as any).actTemplateId == null ? "" : String((task as any).actTemplateId));
+      : (task.actTemplateId == null ? "" : String(task.actTemplateId));
     setEditActTemplateId(rawTemplateId);
-    const rawQty = (task as any).quantity;
+    const rawQty = task.quantity;
     setEditQuantity(rawQty != null ? String(Number(rawQty)) : "");
-    setEditUnit(String((task as any).unit ?? ""));
-    setEditProjectDrawings(String((task as any).projectDrawings ?? ""));
-    setEditNormativeRefs(String((task as any).normativeRefs ?? ""));
-    setEditExecutiveSchemes(Array.isArray((task as any).executiveSchemes) ? ((task as any).executiveSchemes as any) : []);
+    setEditUnit(String(task.unit ?? ""));
+    setEditProjectDrawings(String(task.projectDrawings ?? ""));
+    setEditNormativeRefs(String(task.normativeRefs ?? ""));
+    setEditExecutiveSchemes(Array.isArray(task.executiveSchemes) ? task.executiveSchemes : []);
+    setEditIndependentMaterials(Boolean(task.independentMaterials));
     setEditOpen(true);
   };
 
@@ -453,6 +505,49 @@ export default function Schedule() {
     setPendingEditTemplateId(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingEditTaskId, tasks]);
+
+  const openSplitDialog = (task: ScheduleTask) => {
+    setTaskToSplit(task);
+    setSplitDialogOpen(true);
+  };
+
+  const closeSplitDialog = () => {
+    setSplitDialogOpen(false);
+    setTaskToSplit(null);
+  };
+
+  const handleSplitTask = async (data: {
+    taskId: number;
+    splitDate: string;
+    quantityFirst?: string;
+    quantitySecond?: string;
+    newActNumber?: number;
+    inherit?: {
+      materials?: boolean;
+      projectDrawings?: boolean;
+      normativeRefs?: boolean;
+      executiveSchemes?: boolean;
+    };
+  }) => {
+    try {
+      const result = await splitTask.mutateAsync(data);
+      toast({
+        title: language === "ru" ? "Задача разделена" : "Task split",
+        description: language === "ru" 
+          ? "Задача успешно разделена на две части" 
+          : "Task successfully split into two parts",
+      });
+      closeSplitDialog();
+    } catch (err: any) {
+      const errorMessage = err?.message || (language === "ru" ? "Не удалось разделить задачу" : "Failed to split task");
+      toast({
+        title: t.errorTitle,
+        description: errorMessage,
+        variant: "destructive",
+      });
+      throw err;
+    }
+  };
 
   const handleBootstrap = async () => {
     try {
@@ -638,6 +733,7 @@ export default function Schedule() {
           projectDrawings: editProjectDrawings.trim() ? editProjectDrawings : null,
           normativeRefs: editNormativeRefs.trim() ? editNormativeRefs : null,
           executiveSchemes: (editExecutiveSchemes ?? []).filter((s) => String(s?.title ?? "").trim().length > 0),
+          independentMaterials: editIndependentMaterials,
           // Do not auto-send updateAllTasks — let backend enforce rules and return 409 if needed
           updateAllTasks: undefined,
         },
@@ -969,8 +1065,8 @@ export default function Schedule() {
                       const unit = sourceType === "estimate" ? String(p?.unit ?? "").trim() : "";
 
                       const actNumber =
-                        typeof (task as any).actNumber === "number" && Number((task as any).actNumber) > 0
-                          ? Number((task as any).actNumber)
+                        typeof task.actNumber === "number" && Number(task.actNumber) > 0
+                          ? Number(task.actNumber)
                           : null;
                       const actLabel = language === "ru"
                         ? `акт ${actNumber ?? "-"}`
@@ -1047,6 +1143,17 @@ export default function Schedule() {
                                     >
                                       <ChevronRight className="h-3.5 w-3.5" />
                                     </Button>
+                                    {task.durationDays > 1 && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground/60"
+                                        onClick={() => openSplitDialog(task)}
+                                        aria-label={language === "ru" ? "Разделить задачу" : "Split task"}
+                                      >
+                                        <Scissors className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -1060,14 +1167,21 @@ export default function Schedule() {
                                 </div>
 
                                 {/* Название */}
-                                <p className="text-[13px] leading-snug text-foreground line-clamp-1">{title}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-[13px] leading-snug text-foreground line-clamp-1 flex-1">{title}</p>
+                                  {task.splitGroupId && splitTasksInfo.has(task.id) && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 shrink-0">
+                                      {splitTasksInfo.get(task.id)!.position}/{splitTasksInfo.get(task.id)!.total}
+                                    </Badge>
+                                  )}
+                                </div>
 
                                 {/* Код + объём */}
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-[11px] text-muted-foreground font-mono">{String(codeLabel)}</span>
-                                  {((task as any).quantity != null) && (
+                                  {(task.quantity != null) && (
                                     <span className="text-[12px] font-semibold text-primary">
-                                      {Number((task as any).quantity).toLocaleString("ru-RU")} {(task as any).unit || unit}
+                                      {Number(task.quantity).toLocaleString("ru-RU")} {task.unit || unit}
                                     </span>
                                   )}
                                 </div>
@@ -1162,18 +1276,36 @@ export default function Schedule() {
                         const topRow = scheduleRowLayout.taskTopRowIndexByTaskId.get(task.id) ?? 0;
                         const barHeight = 24; // h-6
                         const top = topRow * rowHeight + Math.max(0, Math.floor((rowHeight - barHeight) / 2));
+                        
+                        const splitGroupId = task.splitGroupId;
+                        const splitColor = getSplitTaskColor(splitGroupId);
+                        const barStyle: React.CSSProperties = { 
+                          left, 
+                          top, 
+                          width,
+                          ...(splitColor ? { 
+                            backgroundColor: splitColor,
+                            borderLeft: '3px solid',
+                            borderColor: splitColor,
+                          } : {})
+                        };
+                        
                         return (
                           <button
                             key={task.id}
                             type="button"
                             className={cn(
                               buttonVariants({ variant: "default", size: "sm" }),
-                              "absolute h-6 min-h-0 px-2 py-0 rounded-md border-0 bg-primary/80 hover:bg-primary text-[10px] leading-none truncate"
+                              "absolute h-6 min-h-0 px-2 py-0 rounded-md border-0 text-[10px] leading-none truncate",
+                              splitColor ? "text-white" : "bg-primary/80 hover:bg-primary"
                             )}
-                            style={{ left, top, width }}
+                            style={barStyle}
                             onClick={() => openEdit(task)}
                             title={[
                               task.actNumber != null ? `Акт №${task.actNumber}` : null,
+                              splitTasksInfo.has(task.id) 
+                                ? `Разделено: ${splitTasksInfo.get(task.id)!.position}/${splitTasksInfo.get(task.id)!.total}`
+                                : null,
                               format(parseISO(String(task.startDate)), "dd.MM.yy"),
                               `${task.durationDays ?? 1} д`,
                             ].filter(Boolean).join(" / ")}
@@ -1438,10 +1570,42 @@ export default function Schedule() {
                     )}
                   </div>
                 </Button>
+
+                {/* Independent Materials Toggle (only for split tasks) */}
+                {selectedTask && selectedTask.splitGroupId && (
+                  <div className="flex items-center justify-between rounded-md border p-3 bg-muted/20">
+                    <div className="flex-1 space-y-0.5">
+                      <Label htmlFor="independent-materials" className="text-sm font-medium cursor-pointer">
+                        {language === "ru" ? "Независимые материалы" : "Independent Materials"}
+                      </Label>
+                      <div className="text-xs text-muted-foreground">
+                        {editIndependentMaterials
+                          ? (language === "ru" 
+                              ? "Материалы только для этой задачи" 
+                              : "Materials only for this task")
+                          : (language === "ru" 
+                              ? "Материалы синхронизируются между разделёнными задачами" 
+                              : "Materials sync across split tasks")}
+                      </div>
+                    </div>
+                    <Switch
+                      id="independent-materials"
+                      checked={editIndependentMaterials}
+                      onCheckedChange={setEditIndependentMaterials}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === "ru" ? "Исполнительные схемы" : "Executive schemes"}</label>
+                {selectedTask && selectedTask.splitGroupId && !editIndependentMaterials && (
+                  <div className="text-xs text-muted-foreground bg-muted/20 rounded-md p-2 border">
+                    {language === "ru" 
+                      ? `Синхронизация: Изменения синхронизируются между ${splitTasksInfo.get(selectedTask.id)?.total ?? 2} разделёнными задачами` 
+                      : `Sync: Changes sync across ${splitTasksInfo.get(selectedTask.id)?.total ?? 2} split tasks`}
+                  </div>
+                )}
                 <ExecutiveSchemesEditor
                   items={editExecutiveSchemes}
                   onChange={setEditExecutiveSchemes}
@@ -1451,6 +1615,13 @@ export default function Schedule() {
 
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === "ru" ? "Номера чертежей проекта" : "Project drawings"}</label>
+                {selectedTask && selectedTask.splitGroupId && !editIndependentMaterials && (
+                  <div className="text-xs text-muted-foreground bg-muted/20 rounded-md p-2 border">
+                    {language === "ru" 
+                      ? `Синхронизация: Изменения синхронизируются между ${splitTasksInfo.get(selectedTask.id)?.total ?? 2} разделёнными задачами` 
+                      : `Sync: Changes sync across ${splitTasksInfo.get(selectedTask.id)?.total ?? 2} split tasks`}
+                  </div>
+                )}
                 <Textarea
                   value={editProjectDrawings}
                   onChange={(e) => setEditProjectDrawings(e.target.value)}
@@ -1460,6 +1631,13 @@ export default function Schedule() {
 
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === "ru" ? "СНиП/ГОСТ/РД" : "Normative references"}</label>
+                {selectedTask && selectedTask.splitGroupId && !editIndependentMaterials && (
+                  <div className="text-xs text-muted-foreground bg-muted/20 rounded-md p-2 border">
+                    {language === "ru" 
+                      ? `Синхронизация: Изменения синхронизируются между ${splitTasksInfo.get(selectedTask.id)?.total ?? 2} разделёнными задачами` 
+                      : `Sync: Changes sync across ${splitTasksInfo.get(selectedTask.id)?.total ?? 2} split tasks`}
+                  </div>
+                )}
                 <Textarea
                   value={editNormativeRefs}
                   onChange={(e) => setEditNormativeRefs(e.target.value)}
@@ -1700,6 +1878,16 @@ export default function Schedule() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Split Task Dialog */}
+      <SplitTaskDialog
+        task={taskToSplit}
+        open={splitDialogOpen}
+        onClose={closeSplitDialog}
+        scheduleId={scheduleId ?? null}
+        onSplit={handleSplitTask}
+        isSubmitting={splitTask.isPending}
+      />
     </div>
   );
 }

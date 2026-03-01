@@ -1062,6 +1062,7 @@ export const api = {
           // Independent quantity/unit for this task (detached from source after bootstrap)
           quantity: z.number().nonnegative().nullable().optional(),
           unit: z.string().nullable().optional(),
+          independentMaterials: z.boolean().optional(),
           updateAllTasks: z.boolean().optional(),
         })
         .refine((v) => Object.keys(v).length > 0, { message: 'Empty patch' }),
@@ -1076,6 +1077,39 @@ export const api = {
           otherTasksCount: z.number().int().min(0),
           conflictKind: z.enum(["actNumberAssign", "actNumberChange", "templateChange"]).optional(),
         }),
+      },
+    },
+    split: {
+      method: 'POST' as const,
+      path: '/api/schedule-tasks/:id/split',
+      input: z.object({
+        splitDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Split date must be in YYYY-MM-DD format'), // YYYY-MM-DD - date where the split occurs
+        quantityFirst: z.string().regex(/^\d+(\.\d+)?$/, 'Quantity must be a non-negative number').optional(), // numeric string for first task portion
+        quantitySecond: z.string().regex(/^\d+(\.\d+)?$/, 'Quantity must be a non-negative number').optional(), // numeric string for second task portion
+        newActNumber: z.number().int().positive().optional(),
+        inherit: z.object({
+          materials: z.boolean().default(false),
+          projectDrawings: z.boolean().default(false),
+          normativeRefs: z.boolean().default(false),
+          executiveSchemes: z.boolean().default(false),
+        }).optional(),
+      }),
+      responses: {
+        200: z.object({
+          original: z.custom<typeof scheduleTasks.$inferSelect>(),
+          created: z.custom<typeof scheduleTasks.$inferSelect>(),
+        }),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+        409: z.object({ message: z.string() }),
+      },
+    },
+    splitSiblings: {
+      method: 'GET' as const,
+      path: '/api/schedule-tasks/:id/split-siblings',
+      responses: {
+        200: z.array(z.custom<typeof scheduleTasks.$inferSelect>()),
+        404: z.object({ message: z.string() }),
       },
     },
   },

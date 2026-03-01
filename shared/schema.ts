@@ -616,6 +616,10 @@ export const scheduleTasks = pgTable(
     // Allows splitting a work into sub-sections (захватки) with partial volumes in the future.
     quantity: numeric("quantity", { precision: 20, scale: 4 }),
     unit: text("unit"),
+    // Split task fields: UUID linking split sub-tasks together
+    splitGroupId: text("split_group_id"),
+    splitIndex: integer("split_index"),
+    independentMaterials: boolean("independent_materials").notNull().default(false),
     startDate: date("start_date").notNull(),
     durationDays: integer("duration_days").notNull(),
     orderIndex: integer("order_index").notNull(),
@@ -628,6 +632,7 @@ export const scheduleTasks = pgTable(
     scheduleOrderIdx: index("schedule_tasks_schedule_order_idx").on(t.scheduleId, t.orderIndex),
     scheduleActNumberIdx: index("schedule_tasks_schedule_act_number_idx").on(t.scheduleId, t.actNumber),
     scheduleActTemplateIdx: index("schedule_tasks_schedule_act_template_idx").on(t.scheduleId, t.actTemplateId),
+    splitGroupIdIdx: index("schedule_tasks_split_group_id_idx").on(t.splitGroupId),
   })
 );
 

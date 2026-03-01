@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { telegramAuthMiddleware } from "./middleware/telegramAuth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,7 +30,7 @@ app.use((req, res, next) => {
   const origin = req.get('origin') || req.get('referer')?.split('/').slice(0, 3).join('/');
   res.header('Access-Control-Allow-Origin', origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Telegram-Init-Data');
   res.header('Access-Control-Allow-Credentials', 'true');
 
   if (req.method === 'OPTIONS') {
@@ -38,6 +39,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Telegram authentication middleware (устанавливает req.telegramUser если есть X-Telegram-Init-Data)
+app.use(telegramAuthMiddleware({ required: false }));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

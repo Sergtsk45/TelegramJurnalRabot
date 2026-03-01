@@ -149,7 +149,15 @@ export function telegramAuthMiddleware(options: { required?: boolean } = { requi
         return;
       }
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[TelegramAuth] TELEGRAM_BOT_TOKEN not set, skipping validation in development');
+        console.warn('[TelegramAuth] TELEGRAM_BOT_TOKEN not set, using dev mode with fake user');
+        // В dev режиме устанавливаем фиктивного пользователя для работы с браузером
+        req.telegramUser = {
+          id: -1,
+          first_name: 'Browser',
+          is_bot: false,
+          is_premium: false,
+          language_code: 'ru',
+        };
         next();
         return;
       }
@@ -166,6 +174,16 @@ export function telegramAuthMiddleware(options: { required?: boolean } = { requi
 
     if (!initData) {
       if (!options.required) {
+        // В dev режиме без initData устанавливаем фиктивного пользователя
+        if (process.env.NODE_ENV === 'development') {
+          req.telegramUser = {
+            id: -1,
+            first_name: 'Browser',
+            is_bot: false,
+            is_premium: false,
+            language_code: 'ru',
+          };
+        }
         next();
         return;
       }

@@ -25,6 +25,26 @@
   - переносит материалы задач в `act_material_usages` (п.3) и `act_document_attachments` (приложения),
   - агрегирует чертежи/нормативы/схемы в поля акта,
   - удаляет акты, для которых не осталось задач.
+- **Разделение задач графика (Split Task)**: пользователь выбирает задачу, разбивает её на 2+ последовательные задачи ("захватки") с независимыми сроками и номерами актов. Функция поддерживает множественное разделение — уже разделённая задача может быть разделена снова (N захваток).
+  - **Процесс разделения**:
+    - Дата разделения задаёт границу между частями (валидация: строго внутри диапазона задачи)
+    - Объём (`quantity`) распределяется вручную между двумя частями (сумма должна соответствовать исходному объёму)
+    - Длительности (`durationDays`) вычисляются автоматически из новых диапазонов
+    - Вторая часть вставляется в график сразу после первой (`orderIndex + 1`), остальные задачи сдвигаются
+    - Пользователь выбирает, какие данные копировать во вторую часть: ☑/☐ Материалы, ☑/☐ Проектная документация, ☑/☐ Нормативные ссылки, ☑/☐ Исполнительные схемы
+    - Каждая захватка получает свой `actNumber` (номер акта для второй части задаётся при разделении)
+  - **Toggle "Независимые материалы" (`independentMaterials`)**:
+    - Управляет синхронизацией материалов И документации ПОСЛЕ разделения (при добавлении/удалении новых данных)
+    - Отображается только для задач с `split_group_id IS NOT NULL`
+    - **Галочка ВЫКЛ** (`independentMaterials = false`, по умолчанию):
+      - Добавление материала/документа качества → автоматически добавляется во все задачи группы с флагом `false`
+      - Удаление материала/документа → каскадирует на все задачи группы с флагом `false`
+      - Изменение `projectDrawings`, `normativeRefs`, `executiveSchemes` → обновляется у всех задач группы с флагом `false`
+      - Режим "общие материалы/документация на все захватки"
+    - **Галочка ВКЛ** (`independentMaterials = true`):
+      - Добавление/удаление материалов/документации затрагивает только эту конкретную задачу
+      - Изолированный режим: "свои материалы/документация для этой захватки"
+  - **Генерация актов**: без изменений в логике — каждая захватка имеет свой `actNumber` → группируется в свой акт со своими сроками (`dateStart`/`dateEnd`) и материалами
 - **Экспорт PDF АОСР**: `POST /api/acts/:id/export` генерирует один или несколько PDF по выбранным шаблонам. Для АОСР используется pdfmake-шаблон `server/templates/aosr/aosr-template.json` с плейсхолдерами `{{...}}` (в эталонном варианте под `005_АОСР 4.pdf` материалы и приложения формируются **текстом**, а не таблицей; данные приходят через `formData`).
 
 ## Архитектура (высокоуровневая)
@@ -91,7 +111,7 @@ flowchart LR
     DB --> AMU[act_material_usages]
     DB --> ADA[act_document_attachments]
     DB --> S[schedules (gantt)]
-    DB --> ST[schedule_tasks (gantt)]
+    DB --> ST[schedule_tasks (gantt + split)]
     DB --> EPML[estimate_position_material_links]
     DB --> O[objects (construction objects)]
     DB --> OP[object_parties]
@@ -197,7 +217,14 @@ flowchart LR
 - `acts`: акты АОСР (глобальный номер `actNumber`, **тип акта** `actTemplateId`, период `dateStart/dateEnd`, статус, агрегированные работы `worksData` (json) + агрегированные поля документации из задач (`projectDrawingsAgg`, `normativeRefsAgg`, `executiveSchemesAgg`)).
 - `attachments`: вложения к актам (url/name/type).
 - `schedules`: графики работ (контейнеры диаграммы Ганта; в MVP обычно используется дефолтный).
-- `schedule_tasks`: задачи графика (полосы Ганта), содержащие `startDate`/`durationDays`/`orderIndex`, номер акта `actNumber`, тип акта `actTemplateId` и поля документации/схем (`projectDrawings`, `normativeRefs`, `executiveSchemes`).
+- `schedule_tasks`: задачи графика (полосы Ганта), содержащие `startDate`/`durationDays`/`orderIndex`, номер акта `actNumber`, тип акта `actTemplateId` и поля документации/схем (`projectDrawings`, `normativeRefs`, `executiveSchemes`). 
+  - **Функция Split Task**: поддержка разделения задач на последовательные захватки:
+    - `split_group_id` (TEXT, nullable) — UUID, связывающий задачи-сиблинги, созданные разделением. `NULL` = задача не разделялась.
+    - `split_index` (INTEGER, nullable) — порядковый номер в группе (0, 1, 2…). Используется для сортировки и отображения "1/3", "2/3".
+    - `independent_materials` (BOOLEAN NOT NULL DEFAULT FALSE) — toggle-режим синхронизации материалов и документации:
+      - `false` (по умолчанию) — добавление/удаление материалов и изменение документации (`projectDrawings`, `normativeRefs`, `executiveSchemes`) автоматически каскадирует на все задачи группы с тем же флагом `false`.
+      - `true` — изменения затрагивают только текущую задачу, изолированный режим.
+  - При разделении материалы/документация наследуются по выбору пользователя; каждая захватка получает свой `actNumber` и генерирует отдельный акт.
 - `task_materials`: материалы, привязанные к задаче графика (источник для `act_material_usages` и `act_document_attachments` при генерации актов).
 - `estimate_position_material_links`: привязка подстроки сметы (`estimate_positions`, вспомогательные строки) к материалу проекта (`project_materials`) для вычисления статуса документов качества в графике работ.
 - `admin_users`: таблица администраторов системы (привязка `telegramUserId` и статус блокировки).
@@ -245,7 +272,15 @@ flowchart LR
   - `GET /api/schedules/:id/estimate-subrows/statuses` — статусы документов качества для подстрок сметы (MVP)
   - `GET /api/schedules/:id/source-info` — информация об источнике графика
   - `POST /api/schedules/:id/change-source` — сменить источник графика (ВОР ↔ Смета)
-- **Schedule Tasks**: `PATCH /api/schedule-tasks/:id` (в т.ч. `actNumber`, `actTemplateId`, документация/схемы, `updateAllTasks`)
+- **Schedule Tasks**: 
+  - `PATCH /api/schedule-tasks/:id` — обновление задачи (в т.ч. `actNumber`, `actTemplateId`, документация/схемы, `updateAllTasks`, `independentMaterials`)
+  - **Split Task**: 
+    - `POST /api/schedule-tasks/:id/split` — разделить задачу на 2+ последовательные захватки:
+      - Request: `{ splitDate, quantityFirst, quantitySecond, newActNumber, inherit: { materials, projectDrawings, normativeRefs, executiveSchemes } }`
+      - Response: `{ original: ScheduleTask, created: ScheduleTask }`
+      - Валидация: `splitDate` должна быть строго внутри диапазона задачи; сумма объёмов должна соответствовать исходному
+      - При множественном разделении: задачи одной группы связаны через `split_group_id`, нумерация через `split_index`
+    - `GET /api/schedule-tasks/:id/split-siblings` — получить все задачи-захватки группы (упорядочены по `split_index`)
 - **Task Materials**: `GET/PUT/POST/DELETE /api/schedule-tasks/:id/materials` — материалы задачи графика
 - **Estimate subrow links (MVP)**:
   - `POST /api/estimate-position-links` — создать/обновить привязку подстроки сметы к материалу проекта

@@ -267,16 +267,7 @@ export default function Acts() {
     mutationFn: async () => {
       if (!scheduleId) throw new Error("Schedule id is required");
       const url = buildUrl(api.schedules.generateActs.path, { id: scheduleId });
-      const res = await fetch(url, {
-        method: api.schedules.generateActs.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to generate acts from schedule");
-      }
+      const res = await apiRequest(api.schedules.generateActs.method, url, {});
       return api.schedules.generateActs.responses[200].parse(await res.json());
     },
     onSuccess: (data) => {

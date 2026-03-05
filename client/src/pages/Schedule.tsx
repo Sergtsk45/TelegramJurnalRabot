@@ -472,22 +472,54 @@ export default function Schedule() {
 
   const openEditRef = useRef<((task: ScheduleTask, overrideTemplateId?: string | null) => void) | null>(null);
 
+  const saveEditFormState = () => {
+    const state = {
+      actNumber: editActNumber,
+      startDate: editStartDate,
+      durationDays: editDurationDays,
+      quantity: editQuantity,
+      unit: editUnit,
+      projectDrawings: editProjectDrawings,
+      normativeRefs: editNormativeRefs,
+      executiveSchemes: editExecutiveSchemes,
+      independentMaterials: editIndependentMaterials,
+      actTemplateId: editActTemplateId,
+    };
+    sessionStorage.setItem("scheduleEditFormState", JSON.stringify(state));
+  };
+
   const openEdit = (task: ScheduleTask, overrideTemplateId?: string | null) => {
     setSelectedTask(task);
-    setEditStartDate(String(task.startDate));
-    setEditDurationDays(String(Number(task.durationDays || 1)));
-    setEditActNumber(task.actNumber == null ? "" : String(task.actNumber));
+
+    // Restore form state saved before navigating to sub-pages (SelectActTemplate, etc.)
+    const savedStr = sessionStorage.getItem("scheduleEditFormState");
+    let saved: Record<string, any> | null = null;
+    if (savedStr) {
+      sessionStorage.removeItem("scheduleEditFormState");
+      try { saved = JSON.parse(savedStr); } catch { /* ignore */ }
+    }
+
+    setEditStartDate(saved?.startDate ?? String(task.startDate));
+    setEditDurationDays(saved?.durationDays ?? String(Number(task.durationDays || 1)));
+    setEditActNumber(saved?.actNumber ?? (task.actNumber == null ? "" : String(task.actNumber)));
+
     const rawTemplateId = overrideTemplateId !== undefined
       ? (overrideTemplateId === null ? "" : String(overrideTemplateId))
-      : (task.actTemplateId == null ? "" : String(task.actTemplateId));
+      : (saved?.actTemplateId ?? (task.actTemplateId == null ? "" : String(task.actTemplateId)));
     setEditActTemplateId(rawTemplateId);
+
     const rawQty = task.quantity;
-    setEditQuantity(rawQty != null ? String(Number(rawQty)) : "");
-    setEditUnit(String(task.unit ?? ""));
-    setEditProjectDrawings(String(task.projectDrawings ?? ""));
-    setEditNormativeRefs(String(task.normativeRefs ?? ""));
-    setEditExecutiveSchemes(Array.isArray(task.executiveSchemes) ? task.executiveSchemes : []);
-    setEditIndependentMaterials(Boolean(task.independentMaterials));
+    setEditQuantity(saved?.quantity ?? (rawQty != null ? String(Number(rawQty)) : ""));
+    setEditUnit(saved?.unit ?? String(task.unit ?? ""));
+    setEditProjectDrawings(saved?.projectDrawings ?? String(task.projectDrawings ?? ""));
+    setEditNormativeRefs(saved?.normativeRefs ?? String(task.normativeRefs ?? ""));
+    setEditExecutiveSchemes(
+      Array.isArray(saved?.executiveSchemes) ? saved.executiveSchemes
+        : (Array.isArray(task.executiveSchemes) ? task.executiveSchemes : [])
+    );
+    setEditIndependentMaterials(
+      saved?.independentMaterials != null ? Boolean(saved.independentMaterials) : Boolean(task.independentMaterials)
+    );
     setEditOpen(true);
   };
 
@@ -1481,6 +1513,7 @@ export default function Schedule() {
                   onClick={() => {
                     if (selectedTask) {
                       sessionStorage.setItem("scheduleEditTaskId", String(selectedTask.id));
+                      saveEditFormState();
                     }
                     navigate("/select-act-template", { 
                       state: { currentTemplateId: editActTemplateId } 
@@ -1545,6 +1578,7 @@ export default function Schedule() {
                   onClick={() => {
                     if (selectedTask) {
                       sessionStorage.setItem("scheduleEditTaskId", String(selectedTask.id));
+                      saveEditFormState();
                       navigate("/select-task-materials", {
                         state: { taskId: selectedTask.id }
                       });

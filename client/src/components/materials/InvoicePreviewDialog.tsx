@@ -46,12 +46,12 @@ function computeCorrections(
 ): Array<{ itemIndex: number; fieldName: "name" | "unit" | "qty"; originalValue: string; correctedValue: string }> {
   const corrections: Array<{ itemIndex: number; fieldName: "name" | "unit" | "qty"; originalValue: string; correctedValue: string }> = [];
 
-  for (const idx of selectedItems) {
+  selectedItems.forEach((idx) => {
     const edited = editedItems.get(idx);
-    if (!edited) continue;
+    if (!edited) return;
 
     const original = parsedItems[idx];
-    if (!original) continue;
+    if (!original) return;
 
     const fields: Array<{ key: "name" | "unit" | "qty"; orig: string }> = [
       { key: "name", orig: original.name ?? "" },
@@ -70,7 +70,7 @@ function computeCorrections(
         });
       }
     }
-  }
+  });
 
   return corrections;
 }

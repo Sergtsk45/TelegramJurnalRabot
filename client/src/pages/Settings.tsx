@@ -370,8 +370,8 @@ export default function Settings() {
           </Link>
         </div>
 
-        {/* Admin Panel link — visible only in dev; in prod requires server-side admin check */}
-        {import.meta.env.DEV && (
+        {/* Admin Panel link — visible for users with admin role */}
+        {authUser?.role === 'admin' && (
           <>
             <div className="px-4 pt-4 pb-1">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">

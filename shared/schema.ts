@@ -744,6 +744,28 @@ export const invoiceParseCorrections = pgTable(
   })
 );
 
+// === Invoice Imports (tracking for tariff quota) ===
+
+export const invoiceImports = pgTable(
+  "invoice_imports",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    objectId: integer("object_id")
+      .notNull()
+      .references(() => objects.id),
+    pdfFilename: text("pdf_filename"),
+    itemsCount: integer("items_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdIdx: index("invoice_imports_user_id_idx").on(t.userId),
+    userIdCreatedAtIdx: index("invoice_imports_user_id_created_at_idx").on(t.userId, t.createdAt),
+  })
+);
+
 // === SCHEMAS ===
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, lastLoginAt: true });
@@ -776,6 +798,10 @@ export const insertEstimatePositionMaterialLinkSchema = createInsertSchema(estim
   updatedAt: true,
 });
 export const insertInvoiceParseCorrectionSchema = createInsertSchema(invoiceParseCorrections).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertInvoiceImportSchema = createInsertSchema(invoiceImports).omit({
   id: true,
   createdAt: true,
 });
@@ -877,6 +903,9 @@ export type InsertEstimatePositionMaterialLink = z.infer<typeof insertEstimatePo
 
 export type InvoiceParseCorrection = typeof invoiceParseCorrections.$inferSelect;
 export type InsertInvoiceParseCorrection = z.infer<typeof insertInvoiceParseCorrectionSchema>;
+
+export type InvoiceImport = typeof invoiceImports.$inferSelect;
+export type InsertInvoiceImport = z.infer<typeof insertInvoiceImportSchema>;
 
 // Request/Response Types
 export type CreateMessageRequest = {

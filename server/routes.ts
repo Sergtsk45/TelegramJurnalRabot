@@ -21,7 +21,7 @@ import { requireAdmin } from "./middleware/adminAuth";
 import { adminStorage } from "./storage";
 import { registerAuthRoutes } from "./routes/auth";
 import { authMiddleware } from "./middleware/auth";
-import { requireFeature } from "./middleware/tariff";
+import { requireFeature, requireQuota } from "./middleware/tariff";
 import { db } from "./db";
 import { users, objects } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
@@ -182,8 +182,7 @@ export async function registerRoutes(
         .from(objects)
         .where(eq(objects.userId, user.id));
 
-      // Подсчет импортов за текущий месяц (заглушка - 0, реализация позже)
-      const invoiceImportsUsed = 0;
+      const invoiceImportsUsed = await storage.countMonthlyInvoiceImports(user.id);
 
       const objectsLimit = getQuota(user.tariff, 'objects');
       const invoiceImportsLimit = getQuota(user.tariff, 'invoiceImports');
@@ -262,6 +261,18 @@ export async function registerRoutes(
 
   // Object (MVP: single current object)
   app.get(api.object.current.path, ...appAuth, async (req, res) => {
+    const objectCount = await storage.countUserObjects(req.user!.id);
+    const objectLimit = getQuota(req.user!.tariff, 'objects');
+    if (objectCount === 0 && objectLimit < 1) {
+      return res.status(403).json({
+        error: 'QUOTA_EXCEEDED',
+        message: 'Ваш тариф не позволяет создавать объекты',
+        quotaType: 'objects',
+        limit: objectLimit,
+        used: objectCount,
+        currentTariff: req.user!.tariff,
+      });
+    }
     const obj = await storage.getOrCreateDefaultObject(req.user!.id);
     return res.status(200).json(obj);
   });
@@ -439,6 +450,7 @@ export async function registerRoutes(
     invoiceParseRateLimiter,
     ...appAuth,
     requireFeature('INVOICE_IMPORT'),
+    requireQuota('invoiceImports', (req) => storage.countMonthlyInvoiceImports(req.user!.id)),
     (req, res, next) => {
       invoiceUpload.single('file')(req, res, (err) => {
         if (err) {
@@ -495,12 +507,21 @@ export async function registerRoutes(
         }
 
         const data = await response.json();
+        const items = (data.items || []).map((item: any) => ({
+          name: String(item.name || item.description || '').trim(),
+          unit: String(item.unit || '').trim(),
+          qty: item.qty != null ? String(item.qty).trim() : undefined,
+        })).filter((item: any) => item.name.length > 0);
+
+        await storage.recordInvoiceImport({
+          userId: req.user!.id,
+          objectId,
+          pdfFilename: req.file!.originalname || null,
+          itemsCount: items.length,
+        });
+
         return res.status(200).json({
-          items: (data.items || []).map((item: any) => ({
-            name: String(item.name || item.description || '').trim(),
-            unit: String(item.unit || '').trim(),
-            qty: item.qty != null ? String(item.qty).trim() : undefined,
-          })).filter((item: any) => item.name.length > 0),
+          items,
           invoice_number: data.invoice_number || undefined,
           invoice_date: data.invoice_date || undefined,
           supplier_name: data.supplier?.name || undefined,

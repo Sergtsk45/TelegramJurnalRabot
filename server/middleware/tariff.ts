@@ -6,7 +6,7 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { hasFeatureAccess, FEATURES, type FeatureKey } from '@shared/tariff-features';
+import { hasFeatureAccess, getQuota, FEATURES, type FeatureKey, type QuotaType } from '@shared/tariff-features';
 
 /**
  * Middleware для проверки доступа к функции по тарифу
@@ -42,5 +42,50 @@ export function requireFeature(featureKey: FeatureKey) {
 
     // Доступ разрешен
     next();
+  };
+}
+
+/**
+ * Middleware для проверки квоты по тарифу
+ * 
+ * @param quotaType - Тип квоты из реестра QUOTAS
+ * @param countFn - Функция подсчёта текущего использования ресурса
+ * @returns Express middleware
+ * 
+ * @example
+ * app.post('/api/objects', requireQuota('objects', (req) => storage.countUserObjects(req.user!.id)), handler);
+ */
+export function requireQuota(
+  quotaType: QuotaType,
+  countFn: (req: Request) => Promise<number>
+) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ 
+        error: 'Unauthorized',
+        message: 'Authentication required' 
+      });
+    }
+
+    try {
+      const limit = getQuota(req.user.tariff, quotaType);
+      const used = await countFn(req);
+
+      if (used >= limit) {
+        return res.status(403).json({
+          error: 'QUOTA_EXCEEDED',
+          message: `Достигнут лимит для вашего тарифа (${used}/${limit === Infinity ? '∞' : limit})`,
+          quotaType,
+          limit: limit === Infinity ? null : limit,
+          used,
+          currentTariff: req.user.tariff,
+        });
+      }
+
+      next();
+    } catch (err) {
+      console.error(`Quota check failed for ${quotaType}:`, err);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
   };
 }

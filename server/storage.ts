@@ -29,6 +29,7 @@ import {
   scheduleTasks,
   taskMaterials,
   invoiceParseCorrections,
+  invoiceImports,
   users,
   type User,
   type InsertWork,
@@ -83,6 +84,7 @@ import {
   type ScheduleTask,
   type TaskMaterial,
   type InsertTaskMaterial,
+  type InsertInvoiceImport,
 } from "@shared/schema";
 import type { PartyDto, PersonDto, SourceDataDto } from "@shared/routes";
 import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql, count } from "drizzle-orm";
@@ -116,6 +118,7 @@ export interface IStorage {
   updateObject(id: number, patch: Partial<Pick<InsertObject, "title" | "address" | "city">>): Promise<DbObject>;
   getObjectSourceData(objectId: number): Promise<SourceDataDto>;
   saveObjectSourceData(objectId: number, data: SourceDataDto): Promise<SourceDataDto>;
+  countUserObjects(userId: number): Promise<number>;
 
   // Materials Catalog
   searchMaterialsCatalog(query?: string): Promise<MaterialCatalog[]>;
@@ -441,6 +444,10 @@ export interface IStorage {
       count: number;
     }>;
   }>;
+
+  // Invoice imports tracking
+  recordInvoiceImport(data: InsertInvoiceImport): Promise<void>;
+  countMonthlyInvoiceImports(userId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -510,6 +517,14 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return created;
+  }
+
+  async countUserObjects(userId: number): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(objects)
+      .where(eq(objects.userId, userId));
+    return Number(result[0]?.count ?? 0);
   }
 
   async getObject(id: number): Promise<DbObject | undefined> {
@@ -3111,6 +3126,25 @@ export class DatabaseStorage implements IStorage {
         count: Number(r.count),
       })),
     };
+  }
+
+  async recordInvoiceImport(data: InsertInvoiceImport): Promise<void> {
+    await db.insert(invoiceImports).values(data);
+  }
+
+  async countMonthlyInvoiceImports(userId: number): Promise<number> {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(invoiceImports)
+      .where(
+        and(
+          eq(invoiceImports.userId, userId),
+          sql`${invoiceImports.createdAt} >= ${monthStart.toISOString()}`
+        )
+      );
+    return Number(result[0]?.count ?? 0);
   }
 }
 

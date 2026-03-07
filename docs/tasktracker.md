@@ -2537,6 +2537,25 @@ server/fonts/TimesNewRomanBoldItalic.ttf
 
 ---
 
+## Задача: Enforcement квот тарифной системы
+- **Статус**: Завершена (2026-03-07)
+- **Приоритет**: Средний
+- **Описание**: Исправлены два незавершённых момента тарифной системы: 1) квота объектов строительства не проверялась при создании, 2) счётчик импортов PDF-счетов был заглушкой (всегда 0).
+- **Шаги выполнения**:
+  - [x] Создать таблицу `invoice_imports` в `shared/schema.ts` (user_id, object_id, pdf_filename, items_count, created_at)
+  - [x] Создать SQL-миграцию `0024_invoice_imports.sql`
+  - [x] Добавить middleware `requireQuota(quotaType, countFn)` в `server/middleware/tariff.ts`
+  - [x] Добавить методы `countUserObjects`, `recordInvoiceImport`, `countMonthlyInvoiceImports` в storage
+  - [x] Заменить заглушку `invoiceImportsUsed = 0` реальным подсчётом в `GET /api/tariff/status`
+  - [x] Добавить `requireQuota` middleware в `POST parse-invoice` + запись успешного импорта
+  - [x] Добавить проверку квоты объектов в `GET /api/object/current`
+  - [x] Проверка TypeScript компиляции — без ошибок
+  - [x] Обновить changelog и tasktracker
+- **Файлы изменены**: `shared/schema.ts`, `migrations/0024_invoice_imports.sql` (новый), `server/middleware/tariff.ts`, `server/storage.ts`, `server/routes.ts`
+- **Зависимости**: Тарифная система (завершена)
+
+---
+
 ## Задача: Изоляция данных пользователей (user data scoping)
 - **Статус**: Завершена (2026-03-07)
 - **Приоритет**: Высокий (критичная проблема безопасности)

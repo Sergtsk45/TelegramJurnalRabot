@@ -1,5 +1,22 @@
 # Changelog
 
+## [2026-03-07] - Enforcement квот тарифной системы
+
+### Добавлено
+- Таблица `invoice_imports` — учёт PDF-импортов счетов на пользователя с помесячными квотами
+- SQL-миграция `0024_invoice_imports.sql` с индексами по `user_id` и `(user_id, created_at)`
+- Middleware `requireQuota(quotaType, countFn)` — универсальная проверка квот по тарифу (403 `QUOTA_EXCEEDED`)
+- Методы storage: `countUserObjects()`, `recordInvoiceImport()`, `countMonthlyInvoiceImports()`
+
+### Изменено
+- `GET /api/tariff/status` — `invoiceImportsUsed` теперь считается реально (из таблицы `invoice_imports`), а не заглушка `0`
+- `POST /api/objects/:objectId/materials/parse-invoice` — добавлена проверка квоты импортов + запись успешного импорта
+- `GET /api/object/current` — добавлена проверка квоты объектов перед созданием
+
+### Исправлено
+- Квота объектов строительства не проверялась при создании — теперь проверяется по тарифу
+- Счётчик импортов PDF-счетов был заглушкой (всегда 0) — реализован реальный помесячный учёт
+
 ## [2026-03-07] - Изоляция данных пользователей (User Data Scoping)
 
 ### Добавлено

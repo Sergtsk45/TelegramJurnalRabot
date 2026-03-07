@@ -2520,3 +2520,47 @@ server/fonts/TimesNewRomanBoldItalic.ttf
   - `JWT_SECRET` — секрет для подписи JWT (>= 32 символа, обязательно в production)
   - `JWT_EXPIRES_IN` — время жизни JWT (default: `7d`)
   - ~~`APP_ACCESS_TOKEN`~~ — удалить после этапа 5
+
+---
+
+## Задача: Отображение данных пользователя в UI панели администратора
+- **Статус**: Не начата
+- **Приоритет**: Средний
+- **Описание**: В админ-панели (вкладка «Пользователи») отображать полные данные о пользователях: display_name, email, роль, способ входа (Telegram / email), дата регистрации, дата последнего входа, привязанные auth_providers. Обеспечить корректное отображение для пользователей, зашедших через Telegram (показывать Telegram ID/username) и через email.
+- **Шаги выполнения**:
+  - [ ] Расширить API `GET /api/admin/users` — возвращать email, список auth_providers (provider + externalId), lastLoginAt
+  - [ ] Обновить `AdminUsers.tsx` — отобразить email, способ входа (иконки Telegram/Email), дату регистрации и последнего входа
+  - [ ] Добавить фильтрацию/поиск по email и display_name
+  - [ ] Показывать роль пользователя (user/admin) с возможностью смены
+  - [ ] Показывать статус блокировки и тариф
+- **Зависимости**: Мультипровайдерная аутентификация (tasktracker2.md / выше)
+
+---
+
+## Задача: Изоляция данных пользователей (user data scoping)
+- **Статус**: Завершена (2026-03-07)
+- **Приоритет**: Высокий (критичная проблема безопасности)
+- **Описание**: Устранена критическая уязвимость: все пользователи видели одни и те же данные (ВОР, сметы, акты, график). Теперь каждый пользователь видит **только данные своего строительного объекта**.
+- **Затронутые сущности**:
+  - `works` — ВОР/ВОИР — фильтрация через `work_collections.object_id` (JOIN)
+  - `work_collections` — коллекции ВОР — добавлен `object_id`
+  - `estimates` — сметы/ЛСР — добавлен `object_id`
+  - `acts` — акты АОСР — уже имели `object_id`, добавлена фильтрация в `getActs()`
+  - `schedules` — график работ — добавлен `object_id`
+  - `project_materials`, `documents`, `document_bindings` — уже имеют `object_id` (было корректно)
+  - `materials_catalog` — глобальный справочник (общий для всех — ОК)
+- **Шаги выполнения**:
+  - [x] Проанализировать все таблицы: какие уже имеют `object_id`, какие нужно расширить
+  - [x] Добавить `object_id` в `work_collections`, `estimates`, `schedules` — SQL-миграция `0023_user_data_scoping.sql`
+  - [x] Обновить `storage.ts`: методы `getWorks(objectId)`, `getWorkCollections(objectId)`, `getEstimates(objectId)`, `getActs(objectId)`, `getOrCreateDefaultSchedule(objectId)`, `importWorkCollection(payload, objectId)`, `importEstimate(payload, objectId)`
+  - [x] Обновить `routes.ts`: добавить `...appAuth` и получение `objectId` через `getOrCreateDefaultObject(req.user!.id)` в 10+ маршрутах
+  - [x] Ownership-checks: GET /workCollections/:id, GET /estimates/:id, GET /acts/:id, GET /schedules/:id — 403 при несоответствии objectId
+  - [x] Миграция существующих данных: `DO $$` блок привязывает "бесхозные" записи к первому объекту в БД
+  - [ ] Тестирование: проверить изоляцию между пользователями (ручное тестирование)
+  - [ ] Admin-панель: рассмотреть доступ администраторов ко всем данным
+- **Технический долг**:
+  - `as any` cast в Drizzle-запросах — требует пересинтеза типов после `drizzle-kit generate`
+  - `acts.objectId` не имеет `NOT NULL` + `ON DELETE CASCADE` — следующая миграция
+  - `importWorks()` (legacy flat import) — не привязан к objectId (низкий приоритет)
+- **Файлы изменены**: `migrations/0023_user_data_scoping.sql`, `shared/schema.ts`, `server/storage.ts`, `server/routes.ts`
+- **Зависимости**: Мультипровайдерная аутентификация (завершена)

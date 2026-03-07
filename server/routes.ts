@@ -72,12 +72,12 @@ function getOpenAIClient(): OpenAI | null {
   return openaiClient;
 }
 
-async function normalizeWorkMessage(messageRaw: string) {
+async function normalizeWorkMessage(messageRaw: string, objectId: number) {
   const openai = getOpenAIClient();
   if (!openai) {
     throw new Error("OpenAI API key is not configured (AI_INTEGRATIONS_OPENAI_API_KEY).");
   }
-  const works = await storage.getWorks();
+  const works = await storage.getWorks(objectId);
   const worksContext = works
     .map((w) => `${w.code}: ${w.description} (${w.unit})`)
     .join("\n");
@@ -795,35 +795,42 @@ export async function registerRoutes(
   });
 
   // Works (BoQ)
-  app.get(api.works.list.path, async (req, res) => {
-    const works = await storage.getWorks();
+  app.get(api.works.list.path, ...appAuth, async (req, res) => {
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const works = await storage.getWorks(obj.id);
     res.json(works);
   });
 
   // Work Collections (Коллекции ВОР)
-  app.get(api.workCollections.list.path, async (_req, res) => {
-    const list = await storage.getWorkCollections();
+  app.get(api.workCollections.list.path, ...appAuth, async (req, res) => {
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const list = await storage.getWorkCollections(obj.id);
     return res.status(200).json(list);
   });
 
-  app.get(api.workCollections.get.path, async (req, res) => {
+  app.get(api.workCollections.get.path, ...appAuth, async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ message: "Invalid id" });
     }
 
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
     const data = await storage.getWorkCollectionWithDetails(id);
     if (!data) {
       return res.status(404).json({ message: "Not found" });
+    }
+    if (data.collection.objectId !== obj.id) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     return res.status(200).json(data);
   });
 
-  app.post(api.workCollections.import.path, async (req, res) => {
+  app.post(api.workCollections.import.path, ...appAuth, async (req, res) => {
     try {
       const input = api.workCollections.import.input.parse(req.body);
-      const result = await storage.importWorkCollection(input as any);
+      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const result = await storage.importWorkCollection(input as any, obj.id);
       return res.status(200).json(result);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -834,7 +841,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.workCollections.delete.path, async (req, res) => {
+  app.delete(api.workCollections.delete.path, ...appAuth, async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ message: "Invalid id" });
@@ -861,29 +868,35 @@ export async function registerRoutes(
   });
 
   // Estimates (Сметы / ЛСР)
-  app.get(api.estimates.list.path, async (_req, res) => {
-    const list = await storage.getEstimates();
+  app.get(api.estimates.list.path, ...appAuth, async (req, res) => {
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const list = await storage.getEstimates(obj.id);
     return res.status(200).json(list);
   });
 
-  app.get(api.estimates.get.path, async (req, res) => {
+  app.get(api.estimates.get.path, ...appAuth, async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ message: "Invalid id" });
     }
 
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
     const data = await storage.getEstimateWithDetails(id);
     if (!data) {
       return res.status(404).json({ message: "Not found" });
+    }
+    if (data.estimate.objectId !== obj.id) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     return res.status(200).json(data);
   });
 
-  app.post(api.estimates.import.path, async (req, res) => {
+  app.post(api.estimates.import.path, ...appAuth, async (req, res) => {
     try {
       const input = api.estimates.import.input.parse(req.body);
-      const result = await storage.importEstimate(input as any);
+      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const result = await storage.importEstimate(input as any, obj.id);
       return res.status(200).json(result);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -894,7 +907,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.estimates.delete.path, async (req, res) => {
+  app.delete(api.estimates.delete.path, ...appAuth, async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ message: "Invalid id" });
@@ -1020,7 +1033,7 @@ export async function registerRoutes(
       // Trigger normalization in background (or await if fast enough)
       // For MVP, we'll await it to show immediate result
       try {
-        const normalized = await normalizeWorkMessage(input.messageRaw);
+        const normalized = await normalizeWorkMessage(input.messageRaw, currentObj.id);
         await storage.updateMessageNormalized(message.id, normalized);
         
         // Return the updated message
@@ -1059,9 +1072,11 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Forbidden" });
       }
 
+      const processObj = await storage.getOrCreateDefaultObject(req.user!.id);
+
       // Re-run normalization on demand (useful if initial processing failed)
       try {
-        const normalized = await normalizeWorkMessage(message.messageRaw);
+        const normalized = await normalizeWorkMessage(message.messageRaw, processObj.id);
         await storage.updateMessageNormalized(message.id, normalized);
       } catch (aiError) {
         console.error("Message processing (AI) failed:", aiError);
@@ -1113,10 +1128,12 @@ export async function registerRoutes(
     try {
       const showVolumes = req.query.showVolumes === "1";
 
+      const section3Obj = await storage.getOrCreateDefaultObject(req.user!.id);
+
       // Load messages and acts in parallel
       const [allMessages, allActs] = await Promise.all([
         storage.getMessages(req.user!.id),
-        storage.getActs(),
+        storage.getActs(section3Obj.id),
       ]);
 
       type Segment = {
@@ -1227,8 +1244,9 @@ export async function registerRoutes(
   });
 
   // Acts
-  app.get(api.acts.list.path, async (req, res) => {
-    const acts = await storage.getActs();
+  app.get(api.acts.list.path, ...appAuth, async (req, res) => {
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const acts = await storage.getActs(obj.id);
     res.json(acts);
   });
 
@@ -1239,18 +1257,28 @@ export async function registerRoutes(
     });
   });
 
-  app.get(api.acts.get.path, async (req, res) => {
-    const act = await storage.getAct(Number(req.params.id));
+  app.get(api.acts.get.path, ...appAuth, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const act = await storage.getAct(id);
     if (!act) return res.status(404).json({ message: "Act not found" });
-    
+    if (act.objectId !== obj.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     const attachments = await storage.getAttachments(act.id);
-    res.json({ ...act, attachments });
+    return res.json({ ...act, attachments });
   });
 
   // Schedules (Gantt)
-  app.get(api.schedules.default.path, async (_req, res) => {
+  app.get(api.schedules.default.path, ...appAuth, async (req, res) => {
     try {
-      const schedule = await storage.getOrCreateDefaultSchedule();
+      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const schedule = await storage.getOrCreateDefaultSchedule(obj.id);
       return res.status(200).json(schedule);
     } catch (err) {
       console.error("Get default schedule failed:", err);
@@ -1258,10 +1286,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post(api.schedules.create.path, async (req, res) => {
+  app.post(api.schedules.create.path, ...appAuth, async (req, res) => {
     try {
       const input = api.schedules.create.input.parse(req.body);
-      const schedule = await storage.createSchedule(input);
+      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const schedule = await storage.createSchedule({ ...input, objectId: obj.id } as any);
       return res.status(201).json(schedule);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1272,32 +1301,40 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.schedules.get.path, async (req, res) => {
+  app.get(api.schedules.get.path, ...appAuth, async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
+    if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ message: "Invalid schedule id" });
     }
 
+    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
     const schedule = await storage.getScheduleWithTasks(id);
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found" });
+    }
+    if (schedule.objectId !== obj.id) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     return res.status(200).json(schedule);
   });
 
-  app.post(api.schedules.bootstrapFromWorks.path, async (req, res) => {
+  app.post(api.schedules.bootstrapFromWorks.path, ...appAuth, async (req, res) => {
     try {
       const id = Number(req.params.id);
-      if (!Number.isFinite(id)) {
+      if (!Number.isFinite(id) || id <= 0) {
         return res.status(400).json({ message: "Invalid schedule id" });
       }
 
       const input = api.schedules.bootstrapFromWorks.input.parse(req.body ?? {});
 
+      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
       const schedule = await storage.getScheduleWithTasks(id);
       if (!schedule) {
         return res.status(404).json({ message: "Schedule not found" });
+      }
+      if (schedule.objectId !== obj.id) {
+        return res.status(403).json({ message: "Access denied" });
       }
 
       const today = new Date().toISOString().slice(0, 10);
@@ -1587,7 +1624,8 @@ export async function registerRoutes(
 
       // Delete acts which no longer have any tasks (global actNumber uniqueness is assumed).
       const actNumbersSet = new Set<number>(actNumbers);
-      const existingActs = await storage.getActs();
+      const generateActsObj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const existingActs = await storage.getActs(generateActsObj.id);
       for (const a of existingActs as any[]) {
         const n = (a as any).actNumber;
         if (n == null) continue;
@@ -2655,8 +2693,10 @@ export async function registerRoutes(
     try {
       const msg = await storage.getMessage(id);
       if (!msg) return res.status(404).json({ error: "Message not found" });
+      if (!msg.userId) return res.status(400).json({ error: "Message has no associated user" });
 
-      const normalized = await normalizeWorkMessage(msg.messageRaw);
+      const adminObj = await storage.getOrCreateDefaultObject(msg.userId);
+      const normalized = await normalizeWorkMessage(msg.messageRaw, adminObj.id);
       await storage.updateMessageNormalized(id, normalized);
       const updated = await storage.getMessage(id);
       res.json(updated);
@@ -2810,27 +2850,7 @@ export async function registerRoutes(
 
 // Seed function
 async function seedDatabase() {
-  const existingWorks = await storage.getWorks();
-  if (existingWorks.length === 0) {
-    await storage.createWork({
-      code: "3.1.1",
-      description: "Installation of foundation rebar",
-      unit: "tons",
-      quantityTotal: "100"
-    });
-    await storage.createWork({
-      code: "3.1.2",
-      description: "Concrete pouring for foundation",
-      unit: "m3",
-      quantityTotal: "500"
-    });
-    await storage.createWork({
-      code: "4.5",
-      description: "Bricklaying for external walls",
-      unit: "m2",
-      quantityTotal: "1200"
-    });
-  }
+  // No-op: works are now scoped per user/object and cannot be seeded without user context
 }
 
 // Run seed (dev-only, opt-in)

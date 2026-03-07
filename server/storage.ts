@@ -198,7 +198,7 @@ export interface IStorage {
   replaceActDocAttachments(actId: number, items: Array<Omit<InsertActDocumentAttachment, "actId">>): Promise<void>;
 
   // Works
-  getWorks(): Promise<Work[]>;
+  getWorks(objectId: number): Promise<Work[]>;
   createWork(work: InsertWork): Promise<Work>;
   getWorkByCode(code: string): Promise<Work | undefined>;
   getWorksByIds(ids: number[]): Promise<Work[]>;
@@ -206,7 +206,7 @@ export interface IStorage {
   importWorks(items: InsertWork[], mode: "merge" | "replace"): Promise<{ created: number; updated: number }>;
 
   // Work Collections (Коллекции ВОР)
-  getWorkCollections(): Promise<WorkCollection[]>;
+  getWorkCollections(objectId: number): Promise<WorkCollection[]>;
   getWorkCollection(id: number): Promise<WorkCollection | undefined>;
   getWorkSections(collectionId: number): Promise<WorkSection[]>;
   getWorksByCollection(collectionId: number): Promise<Work[]>;
@@ -225,11 +225,11 @@ export interface IStorage {
     sections: Array<Omit<InsertWorkSection, "workCollectionId">>;
     positions: Array<Omit<InsertWork, "id" | "workCollectionId" | "sectionId"> & { sectionNumber?: string | null }>;
     resources?: Array<Omit<InsertWorkResource, "workId"> & { positionCode: string }>;
-  }): Promise<{ collectionId: number; sections: number; positions: number; resources: number }>;
+  }, objectId: number): Promise<{ collectionId: number; sections: number; positions: number; resources: number }>;
   deleteWorkCollection(id: number, options?: { resetScheduleIfInUse?: boolean }): Promise<boolean>;
 
   // Estimates (Сметы / ЛСР)
-  getEstimates(): Promise<Estimate[]>;
+  getEstimates(objectId: number): Promise<Estimate[]>;
   getEstimate(id: number): Promise<Estimate | undefined>;
   getEstimateSections(estimateId: number): Promise<EstimateSection[]>;
   getEstimatePositions(estimateId: number): Promise<EstimatePosition[]>;
@@ -250,7 +250,7 @@ export interface IStorage {
     sections: Array<Omit<InsertEstimateSection, "estimateId">>;
     positions: Array<Omit<InsertEstimatePosition, "estimateId" | "sectionId"> & { sectionNumber?: string | null }>;
     resources: Array<Omit<InsertPositionResource, "positionId"> & { positionLineNo: string }>;
-  }): Promise<{ estimateId: number; sections: number; positions: number; resources: number }>;
+  }, objectId: number): Promise<{ estimateId: number; sections: number; positions: number; resources: number }>;
   deleteEstimate(id: number, options?: { resetScheduleIfInUse?: boolean }): Promise<boolean>;
 
   // Messages
@@ -262,7 +262,7 @@ export interface IStorage {
   clearMessages(userId: number): Promise<void>;
 
   // Acts
-  getActs(): Promise<Act[]>;
+  getActs(objectId: number): Promise<Act[]>;
   getAct(id: number): Promise<Act | undefined>;
   getActByNumber(actNumber: number): Promise<Act | undefined>;
   createAct(act: InsertAct, userId: number): Promise<Act>;
@@ -297,7 +297,7 @@ export interface IStorage {
   updateActTemplateSelectionStatus(id: number, status: string, pdfUrl?: string): Promise<ActTemplateSelection>;
 
   // Schedules (Gantt)
-  getOrCreateDefaultSchedule(): Promise<Schedule>;
+  getOrCreateDefaultSchedule(objectId: number): Promise<Schedule>;
   createSchedule(schedule: InsertSchedule): Promise<Schedule>;
   getScheduleWithTasks(id: number): Promise<(Schedule & { tasks: ScheduleTask[] }) | undefined>;
   getScheduleTask(id: number): Promise<ScheduleTask | undefined>;
@@ -1302,8 +1302,18 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getWorks(): Promise<Work[]> {
-    return await db.select().from(works).orderBy(works.code);
+  async getWorks(objectId: number): Promise<Work[]> {
+    const userCollections = await db
+      .select({ id: workCollections.id })
+      .from(workCollections)
+      .where(eq(workCollections.objectId as any, objectId));
+    const collectionIds = userCollections.map(c => c.id);
+    if (collectionIds.length === 0) return [];
+    return await db
+      .select()
+      .from(works)
+      .where(inArray(works.workCollectionId as any, collectionIds))
+      .orderBy(works.code);
   }
 
   async createWork(work: InsertWork): Promise<Work> {
@@ -1500,8 +1510,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Work Collections (Коллекции ВОР)
-  async getWorkCollections(): Promise<WorkCollection[]> {
-    return await db.select().from(workCollections).orderBy(desc(workCollections.createdAt));
+  async getWorkCollections(objectId: number): Promise<WorkCollection[]> {
+    return await db
+      .select()
+      .from(workCollections)
+      .where(eq(workCollections.objectId as any, objectId))
+      .orderBy(desc(workCollections.createdAt));
   }
 
   async getWorkCollection(id: number): Promise<WorkCollection | undefined> {
@@ -1595,11 +1609,11 @@ export class DatabaseStorage implements IStorage {
     sections: Array<Omit<InsertWorkSection, "workCollectionId">>;
     positions: Array<Omit<InsertWork, "id" | "workCollectionId" | "sectionId"> & { sectionNumber?: string | null }>;
     resources?: Array<Omit<InsertWorkResource, "workId"> & { positionCode: string }>;
-  }): Promise<{ collectionId: number; sections: number; positions: number; resources: number }> {
+  }, objectId: number): Promise<{ collectionId: number; sections: number; positions: number; resources: number }> {
     const { collection, sections, positions, resources = [] } = payload;
 
     return await db.transaction(async (tx) => {
-      const [createdCollection] = await tx.insert(workCollections).values(collection).returning();
+      const [createdCollection] = await tx.insert(workCollections).values({ ...collection, objectId } as any).returning();
 
       const sectionIdByNumber = new Map<string, number>();
       let sectionCount = 0;
@@ -1704,8 +1718,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Estimates (Сметы / ЛСР)
-  async getEstimates(): Promise<Estimate[]> {
-    return await db.select().from(estimates).orderBy(desc(estimates.createdAt));
+  async getEstimates(objectId: number): Promise<Estimate[]> {
+    return await db
+      .select()
+      .from(estimates)
+      .where(eq(estimates.objectId as any, objectId))
+      .orderBy(desc(estimates.createdAt));
   }
 
   async getEstimate(id: number): Promise<Estimate | undefined> {
@@ -1801,11 +1819,11 @@ export class DatabaseStorage implements IStorage {
     sections: Array<Omit<InsertEstimateSection, "estimateId">>;
     positions: Array<Omit<InsertEstimatePosition, "estimateId" | "sectionId"> & { sectionNumber?: string | null }>;
     resources: Array<Omit<InsertPositionResource, "positionId"> & { positionLineNo: string }>;
-  }): Promise<{ estimateId: number; sections: number; positions: number; resources: number }> {
+  }, objectId: number): Promise<{ estimateId: number; sections: number; positions: number; resources: number }> {
     const { estimate, sections, positions, resources } = payload;
 
     return await db.transaction(async (tx) => {
-      const [createdEstimate] = await tx.insert(estimates).values(estimate).returning();
+      const [createdEstimate] = await tx.insert(estimates).values({ ...estimate, objectId } as any).returning();
 
       const sectionIdByNumber = new Map<string, number>();
       let sectionCount = 0;
@@ -1990,8 +2008,12 @@ export class DatabaseStorage implements IStorage {
     await db.delete(messages).where(eq(messages.userId, userId));
   }
 
-  async getActs(): Promise<Act[]> {
-    return await db.select().from(acts).orderBy(desc(acts.createdAt));
+  async getActs(objectId: number): Promise<Act[]> {
+    return await db
+      .select()
+      .from(acts)
+      .where(eq(acts.objectId as any, objectId))
+      .orderBy(desc(acts.createdAt));
   }
 
   async getAct(id: number): Promise<Act | undefined> {
@@ -2139,14 +2161,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Schedules (Gantt)
-  async getOrCreateDefaultSchedule(): Promise<Schedule> {
+  async getOrCreateDefaultSchedule(objectId: number): Promise<Schedule> {
     const defaultTitle = "График работ";
-    const [existing] = await db.select().from(schedules).where(eq(schedules.title, defaultTitle));
+    const [existing] = await db
+      .select()
+      .from(schedules)
+      .where(eq(schedules.objectId as any, objectId))
+      .orderBy(asc(schedules.id))
+      .limit(1);
     if (existing) return existing;
 
     const [created] = await db
       .insert(schedules)
-      .values({ title: defaultTitle, calendarStart: null })
+      .values({ title: defaultTitle, calendarStart: null, objectId } as any)
       .returning();
     return created;
   }

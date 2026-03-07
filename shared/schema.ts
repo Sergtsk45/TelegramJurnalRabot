@@ -134,6 +134,7 @@ export const objectResponsiblePersons = pgTable(
 // Work Collections (Коллекции ВОР)
 export const workCollections = pgTable("work_collections", {
   id: serial("id").primaryKey(),
+  objectId: integer("object_id").references(() => objects.id, { onDelete: "cascade" }),
   code: text("code"),
   name: text("name").notNull(),
   
@@ -224,6 +225,7 @@ export const works = pgTable(
 // Estimates (Сметы / ЛСР)
 export const estimates = pgTable("estimates", {
   id: serial("id").primaryKey(),
+  objectId: integer("object_id").references(() => objects.id, { onDelete: "cascade" }),
   code: text("code"), // e.g. "ЛСР-02-01-03"
   name: text("name").notNull(), // e.g. "Узлы учета и управления"
 
@@ -592,6 +594,7 @@ export const actTemplateSelections = pgTable("act_template_selections", {
 // Schedules (Gantt)
 export const schedules = pgTable("schedules", {
   id: serial("id").primaryKey(),
+  objectId: integer("object_id").references(() => objects.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   calendarStart: date("calendar_start"),
   // Source of works for this schedule: 'works' (BoQ) or 'estimate' (LSR/Estimate)

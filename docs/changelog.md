@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-03-07] - Изоляция данных пользователей (User Data Scoping)
+
+### Добавлено
+- SQL-миграция `0023_user_data_scoping.sql`: поле `object_id` добавлено в таблицы `work_collections`, `estimates`, `schedules` с индексами и автоматической привязкой существующих данных
+- Drizzle-поля `objectId` в `shared/schema.ts` для трёх таблиц (FK → `objects.id`, `onDelete: cascade`)
+
+### Изменено
+- `server/storage.ts`: методы `getWorks`, `getWorkCollections`, `getEstimates`, `getActs`, `getOrCreateDefaultSchedule`, `importWorkCollection`, `importEstimate` — принимают `objectId: number` и фильтруют данные через WHERE по объекту пользователя
+- `server/routes.ts`: все маршруты ВОР, Смет, Актов, Графиков — добавлена аутентификация (`...appAuth`) и автоматическое определение `objectId` через `getOrCreateDefaultObject(req.user!.id)`
+- GET `/:id` маршруты для коллекций ВОР, смет, актов, графиков — добавлена проверка ownership (403 Access denied при несоответствии objectId)
+
+### Безопасность
+- Устранена критическая уязвимость: все пользователи видели одни и те же данные (ВОР, сметы, акты, графики)
+- Каждый пользователь теперь видит только данные своего строительного объекта
+- Добавлены ownership-checks на GET /workCollections/:id, GET /estimates/:id, GET /acts/:id, GET /schedules/:id
+
 ## [2026-03-06] - Голосовой ввод (Voice-to-Text)
 
 ### Добавлено

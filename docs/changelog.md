@@ -1,5 +1,32 @@
 # Changelog
 
+## [2026-03-07] - Несколько объектов строительства (multi-object)
+
+### Добавлено
+- SQL-миграция `0025_multi_objects.sql`: поле `current_object_id` в таблице `users` (FK → objects.id, ON DELETE SET NULL), заполнение для существующих пользователей
+- API управления объектами: `GET /api/objects`, `POST /api/objects`, `GET/PATCH/DELETE /api/objects/:objectId`, `POST /api/objects/:objectId/select`
+- Storage-методы: `listUserObjects`, `createObject` (с проверкой квоты), `deleteObject` (каскадное, защита от удаления последнего), `selectCurrentObject`, `getCurrentObject`
+- Middleware `requireObjectAccess` — проверяет владельца объекта по `objectId` из URL (403 при несоответствии)
+- Middleware `resolveCurrentObject` — определяет текущий объект пользователя через `users.current_object_id`
+- React-хуки: `useObjects`, `useCreateObject`, `useUpdateObject`, `useDeleteObject`, `useSelectObject` в `client/src/hooks/use-objects.ts`
+- Утилита `client/src/lib/api-headers.ts` (DRY рефакторинг заголовков авторизации)
+- Компонент `ObjectSelector` — Sheet с выбором/переключением объекта, haptic feedback
+- Компонент `ObjectCreateDialog` — диалог создания нового объекта с валидацией квоты
+- Страница `/objects` — полноценный CRUD управления объектами (карточки, редактирование, каскадное удаление с AlertDialog)
+- Роут `/objects` в `App.tsx`, ссылка "Мои объекты" в гамбургер-меню
+
+### Изменено
+- `server/routes.ts`: 27 вызовов `getOrCreateDefaultObject` заменены на `getCurrentObject` — теперь все операции используют объект, выбранный пользователем
+- `server/storage.ts`: `createAct`, `upsertActByNumber` используют `getCurrentObject`
+- `Header.tsx`: пропс `showObjectSelector` — subtitle становится кликабельным с иконкой ChevronDown, открывает ObjectSelector
+- 7 страниц (Home, Works, Schedule, Acts, WorkLog, SourceData, SourceMaterials): добавлен `showObjectSelector={true}` в Header
+- `CURRENT_OBJECT_QUERY_KEY` экспортирован из `use-source-data.ts` для согласованной инвалидации кеша
+
+### Архитектурные решения
+- Удаление объекта: каскадное через FK (все данные объекта удаляются)
+- Хранение текущего объекта: серверное (`users.current_object_id`)
+- Задача "Изоляция данных пользователей" закрыта в рамках этой задачи
+
 ## [2026-03-07] - Enforcement квот тарифной системы
 
 ### Добавлено

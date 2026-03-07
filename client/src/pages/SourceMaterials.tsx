@@ -96,6 +96,7 @@ export default function SourceMaterials() {
             ? `${language === "ru" ? "ПРОЕКТ" : "PROJECT"}: ${currentObject.data.title}`
             : undefined
         }
+        showObjectSelector
       />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">

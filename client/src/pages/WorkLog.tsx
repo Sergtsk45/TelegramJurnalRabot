@@ -170,7 +170,7 @@ export default function WorkLog() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <Header title={t.title} subtitle={objectSubtitle} showAvatar />
+      <Header title={t.title} subtitle={objectSubtitle} showAvatar showObjectSelector />
 
       {/* Pill-табы (как в референсе) */}
       <div className="border-b border-border/40 bg-background sticky top-14 z-20" data-testid="worklog-tabs">

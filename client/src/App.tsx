@@ -24,6 +24,7 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminMessages from "@/pages/admin/AdminMessages";
 import AdminMaterials from "@/pages/admin/AdminMaterials";
+import { Objects } from "@/pages/Objects";
 
 function Router() {
   return (
@@ -88,6 +89,11 @@ function Router() {
       <Route path="/select-task-materials">
         <AuthGuard>
           <SelectTaskMaterials />
+        </AuthGuard>
+      </Route>
+      <Route path="/objects">
+        <AuthGuard>
+          <Objects />
         </AuthGuard>
       </Route>
       <Route path="/settings">

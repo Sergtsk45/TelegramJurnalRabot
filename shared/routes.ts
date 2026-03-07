@@ -140,6 +140,16 @@ const authResponseSchema = z.object({
   token: z.string(),
 });
 
+const objectResponseSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  address: z.string().nullable(),
+  city: z.string().nullable(),
+  userId: z.number(),
+  isBlocked: z.boolean(),
+  createdAt: z.any(),
+});
+
 export const api = {
   auth: {
     loginTelegram: {
@@ -239,6 +249,76 @@ export const api = {
         400: z.object({ message: z.string() }),
         403: z.object({ error: z.string() }),
         404: z.object({ message: z.string() }),
+      },
+    },
+  },
+  objects: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/objects',
+      responses: {
+        200: z.array(objectResponseSchema),
+        401: z.object({ error: z.string() }),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/objects',
+      input: z.object({
+        title: z.string().min(1, 'Title is required'),
+        address: z.string().optional(),
+        city: z.string().optional(),
+      }),
+      responses: {
+        200: objectResponseSchema,
+        400: z.object({ message: z.string() }),
+        403: z.object({ error: z.string(), message: z.string() }),
+        401: z.object({ error: z.string() }),
+      },
+    },
+    getById: {
+      method: 'GET' as const,
+      path: '/api/objects/:objectId',
+      responses: {
+        200: objectResponseSchema,
+        404: z.object({ message: z.string() }),
+        401: z.object({ error: z.string() }),
+      },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/objects/:objectId',
+      input: z
+        .object({
+          title: z.string().min(1).optional(),
+          address: z.string().nullable().optional(),
+          city: z.string().nullable().optional(),
+        })
+        .refine((v) => Object.keys(v).length > 0, { message: 'Empty patch' }),
+      responses: {
+        200: objectResponseSchema,
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+        401: z.object({ error: z.string() }),
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/objects/:objectId',
+      responses: {
+        204: z.any(),
+        400: z.object({ message: z.string() }),
+        404: z.object({ message: z.string() }),
+        401: z.object({ error: z.string() }),
+      },
+    },
+    select: {
+      method: 'POST' as const,
+      path: '/api/objects/:objectId/select',
+      responses: {
+        200: objectResponseSchema,
+        404: z.object({ message: z.string() }),
+        401: z.object({ error: z.string() }),
       },
     },
   },

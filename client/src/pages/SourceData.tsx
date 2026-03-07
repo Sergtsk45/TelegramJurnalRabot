@@ -171,6 +171,7 @@ export default function SourceData() {
             ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObjectQuery.data.title}`
             : undefined
         }
+        showObjectSelector
       />
 
       {/* Object selector (always above parties/sections) */}

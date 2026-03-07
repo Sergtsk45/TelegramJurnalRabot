@@ -391,6 +391,7 @@ export default function Acts() {
             ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObject.data.title}`
             : undefined
         }
+        showObjectSelector
       />
 
       <div className="flex-1 px-4 py-6 pb-24 max-w-md mx-auto w-full">

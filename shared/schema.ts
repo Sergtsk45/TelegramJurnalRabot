@@ -29,6 +29,9 @@ export type TariffType = (typeof TARIFFS)[keyof typeof TARIFFS];
 // === TABLE DEFINITIONS ===
 
 // Users (Internal user registry)
+// NOTE: currentObjectId has a circular dependency with objects.userId.
+// The FK constraint is defined in migration 0025_multi_objects.sql only,
+// not in Drizzle schema, to avoid TypeScript circular reference issues.
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   displayName: text("display_name").notNull(),
@@ -41,6 +44,7 @@ export const users = pgTable("users", {
   tariff: text('tariff').$type<TariffType>().notNull().default(TARIFFS.BASIC),
   subscriptionEndsAt: timestamp('subscription_ends_at'),
   trialUsed: boolean('trial_used').notNull().default(false),
+  currentObjectId: integer("current_object_id"),
 }, (t) => ({
   emailIdx: index("users_email_idx").on(t.email),
   roleCheck: check("users_role_check", sql`role IN ('user', 'admin')`),

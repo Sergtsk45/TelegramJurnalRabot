@@ -2582,4 +2582,88 @@ server/fonts/TimesNewRomanBoldItalic.ttf
   - `acts.objectId` не имеет `NOT NULL` + `ON DELETE CASCADE` — следующая миграция
   - `importWorks()` (legacy flat import) — не привязан к objectId (низкий приоритет)
 - **Файлы изменены**: `migrations/0023_user_data_scoping.sql`, `shared/schema.ts`, `server/storage.ts`, `server/routes.ts`
+
+---
+
+## Задача: Несколько объектов строительства (multi-object)
+- **Статус**: Завершена (2026-03-07)
+- **Приоритет**: Высокий
+- **Ветка**: `feature/multi-objects`
+- **Описание**: Переход от MVP "один объект на пользователя" к полноценной поддержке нескольких объектов. Тарифные квоты уже реализованы (Basic=1, Standard=5, Premium=∞). Включает объединение с задачей "Изоляция данных пользователей" (закрывается в рамках этой задачи).
+
+### Архитектурные решения
+- Удаление объекта: **каскадное** (все данные объекта удаляются)
+- Копирование объекта: не реализуется
+- Хранение текущего объекта: **серверное** (`users.current_object_id`)
+- Изоляция данных: совмещена с данной задачей
+
+### Этап 1: Backend — SQL-миграция + API управления объектами
+- **Статус**: Завершён
+- **Шаги выполнения**:
+  - [x] SQL-миграция `0025_multi_objects.sql`: добавить `current_object_id` в `users`
+  - [x] Storage: `listUserObjects`, `createObject` (с проверкой квоты), `deleteObject` (каскад), `selectCurrentObject`, `getCurrentObject`
+  - [x] API контракты в `shared/routes.ts`: 6 эндпоинтов для управления объектами
+  - [x] Реализация эндпоинтов в `server/routes.ts` с проверкой квоты и владельца
+
+### Этап 2: Backend — рефакторинг routes.ts (контекст + изоляция)
+- **Статус**: Завершён
+- **Шаги выполнения**:
+  - [x] Middleware `resolveCurrentObject` — читает `users.current_object_id` через `getCurrentObject`
+  - [x] Заменено 27 вызовов `getOrCreateDefaultObject` на `getCurrentObject` в routes.ts
+  - [x] В storage.ts: `createAct`, `upsertActByNumber` используют `getCurrentObject`
+
+### Этап 3: Frontend — хуки и состояние текущего объекта
+- **Статус**: Завершён
+- **Шаги выполнения**:
+  - [x] Хук `useObjects()` — список объектов пользователя
+  - [x] Хук `useCreateObject()` — создание объекта
+  - [x] Хук `useDeleteObject()` — каскадное удаление, сброс всего кеша
+  - [x] Хук `useUpdateObject()` — обновление
+  - [x] Хук `useSelectObject()` — переключение + инвалидация всего кеша TanStack Query
+  - [x] `CURRENT_OBJECT_QUERY_KEY` экспортирован из `use-source-data.ts`
+  - [x] `client/src/lib/api-headers.ts` — DRY-утилита заголовков авторизации
+
+### Этап 4: Frontend — UI переключения и страница управления
+- **Статус**: Завершён
+- **Шаги выполнения**:
+  - [x] Компонент `ObjectSelector` — Sheet снизу со списком объектов, haptic feedback
+  - [x] `ObjectCreateDialog` — диалог создания нового объекта с обработкой ошибки квоты
+  - [x] `Header.tsx`: пропс `showObjectSelector`, кликабельный subtitle с ChevronDown
+  - [x] 7 страниц обновлены: `showObjectSelector={true}`
+  - [x] Страница `/objects` — CRUD-список (карточки, редактирование, AlertDialog удаления)
+  - [x] Роут `/objects` в `App.tsx`, ссылка "Мои объекты" в гамбургер-меню
+
+### Этап 5: Безопасность — middleware проверки владельца
+- **Статус**: Завершён
+- **Шаги выполнения**:
+  - [x] Middleware `requireObjectAccess` — проверяет `objectId` из URL принадлежит пользователю
+  - [x] Расширение типов `Express.Request`: `req.object`, `req.currentObjectId`
+  - [x] `resolveCurrentObject` — не блокирует запрос, записывает `currentObjectId`
+
+### Этап 6: Документация и changelog
+- **Статус**: Завершён
+- **Шаги выполнения**:
+  - [x] Обновить `docs/project.md` — архитектура мульти-объектного режима
+  - [x] Запись в `docs/changelog.md`
+  - [x] Отметить завершение в `docs/tasktracker.md`
+
+- **Файлы (создать)**:
+  - `migrations/0024_multi_objects.sql`
+  - `server/middleware/objectAccess.ts`
+  - `client/src/hooks/use-objects.ts`
+  - `client/src/components/ObjectSelector.tsx`
+  - `client/src/components/ObjectCreateDialog.tsx`
+  - `client/src/pages/Objects.tsx`
+
+- **Файлы (изменить)**:
+  - `shared/schema.ts` — `users.currentObjectId`
+  - `shared/routes.ts` — новые API контракты
+  - `server/storage.ts` — новые методы, `getCurrentObject`
+  - `server/routes.ts` — новые эндпоинты, middleware
+  - `client/src/hooks/use-source-data.ts` — `useCurrentObject`
+  - `client/src/components/Header.tsx` — ObjectSelector
+  - `client/src/App.tsx` — новый роут /objects
+
+- **Оценка**: ~22 часа, ~20 файлов
+- **Зависимости**: Задача "Изоляция данных" (закрывается здесь), тарифная система (уже реализована)
 - **Зависимости**: Мультипровайдерная аутентификация (завершена)

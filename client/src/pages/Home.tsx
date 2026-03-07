@@ -157,7 +157,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header title={t.title} subtitle={objectSubtitle} showAvatar />
+      <Header title={t.title} subtitle={objectSubtitle} showAvatar showObjectSelector />
 
       {/* Browser access banner (outside Telegram) */}
       {!isInTelegram && (needsAuth || hasInvalidAuth) && (

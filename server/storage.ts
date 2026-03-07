@@ -88,6 +88,7 @@ import {
 } from "@shared/schema";
 import type { PartyDto, PersonDto, SourceDataDto } from "@shared/routes";
 import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql, count } from "drizzle-orm";
+import { getQuota, getEffectiveTariff } from "@shared/tariff-features";
 
 type ObjectPartyRole = "customer" | "builder" | "designer";
 type ObjectPersonRole =
@@ -119,6 +120,13 @@ export interface IStorage {
   getObjectSourceData(objectId: number): Promise<SourceDataDto>;
   saveObjectSourceData(objectId: number, data: SourceDataDto): Promise<SourceDataDto>;
   countUserObjects(userId: number): Promise<number>;
+
+  // Multi-object management (Phase 1)
+  listUserObjects(userId: number): Promise<DbObject[]>;
+  createObject(userId: number, data: { title: string; address?: string; city?: string }): Promise<DbObject>;
+  deleteObject(objectId: number, userId: number): Promise<void>;
+  selectCurrentObject(userId: number, objectId: number): Promise<void>;
+  getCurrentObject(userId: number): Promise<DbObject>;
 
   // Materials Catalog
   searchMaterialsCatalog(query?: string): Promise<MaterialCatalog[]>;
@@ -546,6 +554,97 @@ export class DatabaseStorage implements IStorage {
       .where(eq(objects.id, id))
       .returning();
     return updated;
+  }
+
+  async listUserObjects(userId: number): Promise<DbObject[]> {
+    return db
+      .select()
+      .from(objects)
+      .where(eq(objects.userId, userId))
+      .orderBy(asc(objects.createdAt));
+  }
+
+  async createObject(
+    userId: number,
+    data: { title: string; address?: string; city?: string }
+  ): Promise<DbObject> {
+    const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!userRow) throw new Error("USER_NOT_FOUND");
+
+    const effectiveTariff = getEffectiveTariff(userRow.tariff, userRow.subscriptionEndsAt);
+    const quota = getQuota(effectiveTariff, "objects");
+    const currentCount = await this.countUserObjects(userId);
+
+    if (currentCount >= quota) {
+      const err = new Error("QUOTA_EXCEEDED") as Error & { code: string };
+      err.code = "QUOTA_EXCEEDED";
+      throw err;
+    }
+
+    const [created] = await db
+      .insert(objects)
+      .values({
+        title: data.title,
+        address: data.address ?? null,
+        city: data.city ?? null,
+        userId,
+      })
+      .returning();
+
+    await db
+      .update(users)
+      .set({ currentObjectId: created.id } as any)
+      .where(eq(users.id, userId));
+
+    return created;
+  }
+
+  async deleteObject(objectId: number, userId: number): Promise<void> {
+    const [obj] = await db.select().from(objects).where(eq(objects.id, objectId)).limit(1);
+    if (!obj || obj.userId !== userId) throw new Error("OBJECT_NOT_FOUND");
+
+    const allObjects = await this.listUserObjects(userId);
+    if (allObjects.length <= 1) {
+      const err = new Error("LAST_OBJECT") as Error & { code: string };
+      err.code = "LAST_OBJECT";
+      throw err;
+    }
+
+    const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (userRow && (userRow as any).currentObjectId === objectId) {
+      const nextObject = allObjects.find((o) => o.id !== objectId);
+      if (nextObject) {
+        await db
+          .update(users)
+          .set({ currentObjectId: nextObject.id } as any)
+          .where(eq(users.id, userId));
+      }
+    }
+
+    await db.delete(objects).where(eq(objects.id, objectId));
+  }
+
+  async selectCurrentObject(userId: number, objectId: number): Promise<void> {
+    const [obj] = await db.select().from(objects).where(eq(objects.id, objectId)).limit(1);
+    if (!obj || obj.userId !== userId) throw new Error("OBJECT_NOT_FOUND");
+
+    await db
+      .update(users)
+      .set({ currentObjectId: objectId } as any)
+      .where(eq(users.id, userId));
+  }
+
+  async getCurrentObject(userId: number): Promise<DbObject> {
+    const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (userRow && (userRow as any).currentObjectId) {
+      const [obj] = await db
+        .select()
+        .from(objects)
+        .where(eq(objects.id, (userRow as any).currentObjectId))
+        .limit(1);
+      if (obj && obj.userId === userId) return obj;
+    }
+    return this.getOrCreateDefaultObject(userId);
   }
 
   async getObjectSourceData(objectId: number): Promise<SourceDataDto> {
@@ -2042,7 +2141,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAct(act: InsertAct, userId: number): Promise<Act> {
-    const defaultObject = await this.getOrCreateDefaultObject(userId);
+    const defaultObject = await this.getCurrentObject(userId);
     const objectId = (act as any).objectId ?? defaultObject.id;
     const [newAct] = await db
       .insert(acts)
@@ -2064,7 +2163,7 @@ export class DatabaseStorage implements IStorage {
     executiveSchemesAgg?: Array<{ title: string; fileUrl?: string }> | null;
   }, userId: number): Promise<{ act: Act; created: boolean }> {
     const existing = await this.getActByNumber(data.actNumber);
-    const defaultObject = await this.getOrCreateDefaultObject(userId);
+    const defaultObject = await this.getCurrentObject(userId);
 
     if (existing) {
       const nextStatus =

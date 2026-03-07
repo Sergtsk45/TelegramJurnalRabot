@@ -273,14 +273,14 @@ export async function registerRoutes(
         currentTariff: req.user!.tariff,
       });
     }
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     return res.status(200).json(obj);
   });
 
   app.patch(api.object.patchCurrent.path, ...appAuth, async (req, res) => {
     try {
       const patch = api.object.patchCurrent.input.parse(req.body);
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const updated = await storage.updateObject(obj.id, patch);
       return res.status(200).json(updated);
     } catch (err) {
@@ -294,7 +294,7 @@ export async function registerRoutes(
 
   app.get(api.object.getSourceData.path, ...appAuth, async (req, res) => {
     try {
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const data = await storage.getObjectSourceData(obj.id);
       return res.status(200).json(data);
     } catch (err) {
@@ -309,7 +309,7 @@ export async function registerRoutes(
   app.put(api.object.putSourceData.path, ...appAuth, async (req, res) => {
     try {
       const input = api.object.putSourceData.input.parse(req.body);
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const saved = await storage.saveObjectSourceData(obj.id, input);
       return res.status(200).json(saved);
     } catch (err) {
@@ -320,6 +320,116 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Object not found" });
       }
       console.error("Put source-data failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Multi-object management endpoints
+  app.get(api.objects.list.path, ...appAuth, async (req, res) => {
+    try {
+      const list = await storage.listUserObjects(req.user!.id);
+      return res.status(200).json(list);
+    } catch (err) {
+      console.error("Objects list failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.objects.create.path, ...appAuth, async (req, res) => {
+    try {
+      const input = api.objects.create.input.parse(req.body);
+      const created = await storage.createObject(req.user!.id, input);
+      return res.status(200).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      if (err instanceof Error && (err as any).code === "QUOTA_EXCEEDED") {
+        return res.status(403).json({
+          error: "QUOTA_EXCEEDED",
+          message: "Превышена квота на количество объектов для вашего тарифа",
+        });
+      }
+      console.error("Object create failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.get(api.objects.getById.path, ...appAuth, async (req, res) => {
+    const objectId = Number(req.params.objectId);
+    if (!Number.isFinite(objectId) || objectId <= 0) {
+      return res.status(400).json({ message: "Invalid objectId" });
+    }
+    try {
+      const obj = await storage.getObject(objectId);
+      if (!obj || obj.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Object not found" });
+      }
+      return res.status(200).json(obj);
+    } catch (err) {
+      console.error("Object getById failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.patch(api.objects.update.path, ...appAuth, async (req, res) => {
+    const objectId = Number(req.params.objectId);
+    if (!Number.isFinite(objectId) || objectId <= 0) {
+      return res.status(400).json({ message: "Invalid objectId" });
+    }
+    try {
+      const patch = api.objects.update.input.parse(req.body);
+      const obj = await storage.getObject(objectId);
+      if (!obj || obj.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Object not found" });
+      }
+      const updated = await storage.updateObject(objectId, patch as any);
+      return res.status(200).json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Object update failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.delete(api.objects.delete.path, ...appAuth, async (req, res) => {
+    const objectId = Number(req.params.objectId);
+    if (!Number.isFinite(objectId) || objectId <= 0) {
+      return res.status(400).json({ message: "Invalid objectId" });
+    }
+    try {
+      await storage.deleteObject(objectId, req.user!.id);
+      return res.status(204).send();
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.message === "OBJECT_NOT_FOUND") {
+          return res.status(404).json({ message: "Object not found" });
+        }
+        if ((err as any).code === "LAST_OBJECT") {
+          return res.status(400).json({ message: "Нельзя удалить единственный объект" });
+        }
+      }
+      console.error("Object delete failed:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post(api.objects.select.path, ...appAuth, async (req, res) => {
+    const objectId = Number(req.params.objectId);
+    if (!Number.isFinite(objectId) || objectId <= 0) {
+      return res.status(400).json({ message: "Invalid objectId" });
+    }
+    try {
+      await storage.selectCurrentObject(req.user!.id, objectId);
+      const obj = await storage.getObject(objectId);
+      return res.status(200).json(obj);
+    } catch (err) {
+      if (err instanceof Error && err.message === "OBJECT_NOT_FOUND") {
+        return res.status(404).json({ message: "Object not found" });
+      }
+      console.error("Object select failed:", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   });
@@ -662,7 +772,7 @@ export async function registerRoutes(
   app.get(api.invoiceCorrections.stats.path, ...appAuth, async (req, res) => {
     try {
       const userId = req.user!.id;
-      const obj = await storage.getOrCreateDefaultObject(userId);
+      const obj = await storage.getCurrentObject(userId);
       const from = typeof req.query.from === "string" ? req.query.from : undefined;
       const to = typeof req.query.to === "string" ? req.query.to : undefined;
 
@@ -817,14 +927,14 @@ export async function registerRoutes(
 
   // Works (BoQ)
   app.get(api.works.list.path, ...appAuth, async (req, res) => {
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const works = await storage.getWorks(obj.id);
     res.json(works);
   });
 
   // Work Collections (Коллекции ВОР)
   app.get(api.workCollections.list.path, ...appAuth, async (req, res) => {
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const list = await storage.getWorkCollections(obj.id);
     return res.status(200).json(list);
   });
@@ -835,7 +945,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid id" });
     }
 
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const data = await storage.getWorkCollectionWithDetails(id);
     if (!data) {
       return res.status(404).json({ message: "Not found" });
@@ -850,7 +960,7 @@ export async function registerRoutes(
   app.post(api.workCollections.import.path, ...appAuth, async (req, res) => {
     try {
       const input = api.workCollections.import.input.parse(req.body);
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const result = await storage.importWorkCollection(input as any, obj.id);
       return res.status(200).json(result);
     } catch (err) {
@@ -890,7 +1000,7 @@ export async function registerRoutes(
 
   // Estimates (Сметы / ЛСР)
   app.get(api.estimates.list.path, ...appAuth, async (req, res) => {
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const list = await storage.getEstimates(obj.id);
     return res.status(200).json(list);
   });
@@ -901,7 +1011,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid id" });
     }
 
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const data = await storage.getEstimateWithDetails(id);
     if (!data) {
       return res.status(404).json({ message: "Not found" });
@@ -916,7 +1026,7 @@ export async function registerRoutes(
   app.post(api.estimates.import.path, ...appAuth, async (req, res) => {
     try {
       const input = api.estimates.import.input.parse(req.body);
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const result = await storage.importEstimate(input as any, obj.id);
       return res.status(200).json(result);
     } catch (err) {
@@ -1043,7 +1153,7 @@ export async function registerRoutes(
       const input = api.messages.create.input.parse(req.body);
 
       // Резолвим текущий объект пользователя для привязки сообщения
-      const currentObj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const currentObj = await storage.getCurrentObject(req.user!.id);
 
       const message = await storage.createMessage({
         objectId: currentObj.id,
@@ -1093,7 +1203,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Forbidden" });
       }
 
-      const processObj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const processObj = await storage.getCurrentObject(req.user!.id);
 
       // Re-run normalization on demand (useful if initial processing failed)
       try {
@@ -1149,7 +1259,7 @@ export async function registerRoutes(
     try {
       const showVolumes = req.query.showVolumes === "1";
 
-      const section3Obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const section3Obj = await storage.getCurrentObject(req.user!.id);
 
       // Load messages and acts in parallel
       const [allMessages, allActs] = await Promise.all([
@@ -1266,7 +1376,7 @@ export async function registerRoutes(
 
   // Acts
   app.get(api.acts.list.path, ...appAuth, async (req, res) => {
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const acts = await storage.getActs(obj.id);
     res.json(acts);
   });
@@ -1284,7 +1394,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid id" });
     }
 
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const act = await storage.getAct(id);
     if (!act) return res.status(404).json({ message: "Act not found" });
     if (act.objectId !== obj.id) {
@@ -1298,7 +1408,7 @@ export async function registerRoutes(
   // Schedules (Gantt)
   app.get(api.schedules.default.path, ...appAuth, async (req, res) => {
     try {
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const schedule = await storage.getOrCreateDefaultSchedule(obj.id);
       return res.status(200).json(schedule);
     } catch (err) {
@@ -1310,7 +1420,7 @@ export async function registerRoutes(
   app.post(api.schedules.create.path, ...appAuth, async (req, res) => {
     try {
       const input = api.schedules.create.input.parse(req.body);
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const schedule = await storage.createSchedule({ ...input, objectId: obj.id } as any);
       return res.status(201).json(schedule);
     } catch (err) {
@@ -1328,7 +1438,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid schedule id" });
     }
 
-    const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+    const obj = await storage.getCurrentObject(req.user!.id);
     const schedule = await storage.getScheduleWithTasks(id);
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found" });
@@ -1349,7 +1459,7 @@ export async function registerRoutes(
 
       const input = api.schedules.bootstrapFromWorks.input.parse(req.body ?? {});
 
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const schedule = await storage.getScheduleWithTasks(id);
       if (!schedule) {
         return res.status(404).json({ message: "Schedule not found" });
@@ -1645,7 +1755,7 @@ export async function registerRoutes(
 
       // Delete acts which no longer have any tasks (global actNumber uniqueness is assumed).
       const actNumbersSet = new Set<number>(actNumbers);
-      const generateActsObj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const generateActsObj = await storage.getCurrentObject(req.user!.id);
       const existingActs = await storage.getActs(generateActsObj.id);
       for (const a of existingActs as any[]) {
         const n = (a as any).actNumber;
@@ -2250,7 +2360,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: 'Schedule source type must be "estimate"' });
       }
 
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const statuses = await storage.getEstimateSubrowStatuses({
         objectId: obj.id,
         estimateId: Number(schedule.estimateId),
@@ -2267,7 +2377,7 @@ export async function registerRoutes(
   app.post(api.estimatePositionLinks.upsert.path, ...appAuth, async (req, res) => {
     try {
       const input = api.estimatePositionLinks.upsert.input.parse(req.body);
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
 
       const saved = await storage.upsertEstimatePositionMaterialLink(obj.id, {
         estimateId: input.estimateId,
@@ -2294,7 +2404,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid estimatePositionId" });
     }
     try {
-      const obj = await storage.getOrCreateDefaultObject(req.user!.id);
+      const obj = await storage.getCurrentObject(req.user!.id);
       const ok = await storage.deleteEstimatePositionMaterialLink(obj.id, estimatePositionId);
       if (!ok) return res.status(404).json({ message: "Not found" });
       return res.status(204).send();
@@ -2347,7 +2457,7 @@ export async function registerRoutes(
       const { templateIds, formData } = req.body ?? {};
 
       // Resolve object-scoped source data (MVP: single current object)
-      const objectId = (act as any).objectId ?? (await storage.getOrCreateDefaultObject(req.user!.id)).id;
+      const objectId = (act as any).objectId ?? (await storage.getCurrentObject(req.user!.id)).id;
       const sourceData = await storage.getObjectSourceData(Number(objectId));
       const objectActData = buildActDataFromSourceData(sourceData);
       const dbP3MaterialsText = await buildP3MaterialsText(actId);
@@ -2716,7 +2826,7 @@ export async function registerRoutes(
       if (!msg) return res.status(404).json({ error: "Message not found" });
       if (!msg.userId) return res.status(400).json({ error: "Message has no associated user" });
 
-      const adminObj = await storage.getOrCreateDefaultObject(msg.userId);
+      const adminObj = await storage.getCurrentObject(msg.userId);
       const normalized = await normalizeWorkMessage(msg.messageRaw, adminObj.id);
       await storage.updateMessageNormalized(id, normalized);
       const updated = await storage.getMessage(id);

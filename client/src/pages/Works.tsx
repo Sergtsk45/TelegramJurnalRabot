@@ -310,7 +310,7 @@ export default function Works() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <Header title={t.title} subtitle={objectSubtitle} />
+      <Header title={t.title} subtitle={objectSubtitle} showObjectSelector />
 
       {/* Sticky toolbar */}
       <div className="sticky top-14 z-30 bg-background/95 backdrop-blur border-b border-border/40 px-4 py-3 space-y-3">

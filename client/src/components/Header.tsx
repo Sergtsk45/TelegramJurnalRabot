@@ -3,10 +3,11 @@
  * @description: Вариативный хедер приложения с hamburger-меню (Sheet), кнопкой назад, subtitle, быстрой ссылкой на чат (молния), поиском и аватаром
  * @dependencies: lucide-react, @/components/ui/avatar, @/components/ui/button, @/components/ui/sheet, wouter
  * @created: 2026-02-23
- * @updated: 2026-02-23
+ * @updated: 2026-03-07
  */
 
-import { ArrowLeft, Menu, Search, Zap } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, ChevronDown, Menu, Search, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,6 +18,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { ObjectSelector } from "./ObjectSelector";
 
 interface HeaderProps {
   title: string;
@@ -27,6 +29,7 @@ interface HeaderProps {
   showAvatar?: boolean;
   showZapLink?: boolean;
   rightAction?: React.ReactNode;
+  showObjectSelector?: boolean;
 }
 
 export function Header({
@@ -38,29 +41,49 @@ export function Header({
   showAvatar = false,
   showZapLink = true,
   rightAction,
+  showObjectSelector = false,
 }: HeaderProps) {
+  const [objectSelectorOpen, setObjectSelectorOpen] = useState(false);
+
   return (
-    <header className="sticky top-0 z-40 bg-background border-b border-border/50">
-      <div className="max-w-md mx-auto flex h-14 items-center justify-between px-4">
-        <LeftSlot showBack={showBack} onBack={onBack} />
+    <>
+      <header className="sticky top-0 z-40 bg-background border-b border-border/50">
+        <div className="max-w-md mx-auto flex h-14 items-center justify-between px-4">
+          <LeftSlot showBack={showBack} onBack={onBack} />
 
-        <div className="flex flex-col items-center flex-1 min-w-0 px-2">
-          <h1 className="font-semibold text-[17px] leading-tight truncate">{title}</h1>
-          {subtitle && (
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground leading-none mt-0.5 truncate">
-              {subtitle}
-            </p>
-          )}
+          <div className="flex flex-col items-center flex-1 min-w-0 px-2">
+            <h1 className="font-semibold text-[17px] leading-tight truncate">{title}</h1>
+            {subtitle && (
+              showObjectSelector ? (
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground leading-none mt-0.5 hover:text-foreground transition-colors"
+                  onClick={() => setObjectSelectorOpen(true)}
+                >
+                  <span className="truncate max-w-[160px]">{subtitle}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                </button>
+              ) : (
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground leading-none mt-0.5 truncate">
+                  {subtitle}
+                </p>
+              )
+            )}
+          </div>
+
+          <RightSlot
+            rightAction={rightAction}
+            showSearch={showSearch}
+            showAvatar={showAvatar}
+            showZapLink={showZapLink && !showBack}
+          />
         </div>
+      </header>
 
-        <RightSlot
-          rightAction={rightAction}
-          showSearch={showSearch}
-          showAvatar={showAvatar}
-          showZapLink={showZapLink && !showBack}
-        />
-      </div>
-    </header>
+      {showObjectSelector && (
+        <ObjectSelector open={objectSelectorOpen} onOpenChange={setObjectSelectorOpen} />
+      )}
+    </>
   );
 }
 
@@ -90,6 +113,11 @@ function LeftSlot({
           <SheetTitle>Навигация</SheetTitle>
         </SheetHeader>
         <nav className="mt-6 flex flex-col gap-1">
+          <Link href="/objects">
+            <Button variant="ghost" className="w-full justify-start">
+              Мои объекты
+            </Button>
+          </Link>
           <Link href="/settings">
             <Button variant="ghost" className="w-full justify-start">
               Настройки

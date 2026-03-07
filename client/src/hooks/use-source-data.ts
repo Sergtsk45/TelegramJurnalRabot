@@ -7,24 +7,15 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type SourceDataDto } from "@shared/routes";
-import { getTelegramInitData } from "../lib/telegram";
-import { getAuthToken } from "../lib/auth";
+import { createApiHeaders } from "../lib/api-headers";
 
-function createHeaders(includeContentType = false): HeadersInit {
-  const headers: HeadersInit = {};
-  if (includeContentType) headers["Content-Type"] = "application/json";
-  const initData = getTelegramInitData();
-  if (initData) headers["X-Telegram-Init-Data"] = initData;
-  const authToken = getAuthToken();
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  return headers;
-}
+export const CURRENT_OBJECT_QUERY_KEY = [api.object.current.path];
 
 export function useCurrentObject() {
   return useQuery({
-    queryKey: [api.object.current.path],
+    queryKey: CURRENT_OBJECT_QUERY_KEY,
     queryFn: async () => {
-      const res = await fetch(api.object.current.path, { credentials: "include", headers: createHeaders() });
+      const res = await fetch(api.object.current.path, { credentials: "include", headers: createApiHeaders() });
       if (!res.ok) throw new Error("Failed to fetch current object");
       return api.object.current.responses[200].parse(await res.json());
     },
@@ -35,7 +26,7 @@ export function useSourceData() {
   return useQuery({
     queryKey: [api.object.getSourceData.path],
     queryFn: async () => {
-      const res = await fetch(api.object.getSourceData.path, { credentials: "include", headers: createHeaders() });
+      const res = await fetch(api.object.getSourceData.path, { credentials: "include", headers: createApiHeaders() });
       if (!res.ok) throw new Error("Failed to fetch source data");
       return api.object.getSourceData.responses[200].parse(await res.json());
     },
@@ -48,7 +39,7 @@ export function useSaveSourceData() {
     mutationFn: async (data: SourceDataDto) => {
       const res = await fetch(api.object.putSourceData.path, {
         method: api.object.putSourceData.method,
-        headers: createHeaders(true),
+        headers: createApiHeaders(true),
         body: JSON.stringify(data),
         credentials: "include",
       });
@@ -62,7 +53,7 @@ export function useSaveSourceData() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.object.getSourceData.path] });
-      queryClient.invalidateQueries({ queryKey: [api.object.current.path] });
+      queryClient.invalidateQueries({ queryKey: CURRENT_OBJECT_QUERY_KEY });
     },
   });
 }

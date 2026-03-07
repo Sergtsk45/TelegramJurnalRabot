@@ -891,6 +891,7 @@ export default function Schedule() {
             ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObject.title}`
             : undefined
         }
+        showObjectSelector
       />
 
       <div className="flex-1 px-3 py-4 pb-24 w-full max-w-none">

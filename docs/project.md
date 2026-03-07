@@ -196,7 +196,7 @@ flowchart LR
 
 ## Модель данных (текущее состояние)
 Основные таблицы:
-- `users`: реестр пользователей системы (id, email, password_hash, role, isBlocked, created_at, updated_at, **tariff, subscription_ends_at, trial_used**)
+- `users`: реестр пользователей системы (id, email, password_hash, role, isBlocked, created_at, updated_at, **tariff, subscription_ends_at, trial_used**, **current_object_id** FK → objects.id — текущий активный объект строительства)
 - `auth_providers`: привязки провайдеров (id, user_id, provider, provider_user_id, linked_at)
 - `objects`: объект строительства (MVP: один «текущий объект» на пользователя), используется как якорь для исходных данных плейсхолдеров. Связь с пользователем через `users.id`.
 - `object_parties`: стороны объекта (заказчик/подрядчик/проектировщик) с реквизитами (минимум — `fullName`, дополнительно — ИНН/КПП/ОГРН, юр.адрес, телефон, email, реквизиты СРО). Эти данные используются при экспорте АОСР в PDF (если не переопределены через `formData`).
@@ -257,6 +257,63 @@ flowchart LR
 - **Frontend защита** — компонент `<TariffGuard>` скрывает/блокирует UI элементы
 - **Эффективный тариф** — функция `getEffectiveTariff()` автоматически понижает до Basic при истечении подписки
 
+### Мульти-объектный режим
+
+Пользователь может иметь несколько объектов строительства. Активный объект определяет контекст всех операций (ВОР, графика, актов, материалов и т.д.).
+
+#### Схема данных
+
+```
+users
+  └── current_object_id (FK → objects.id, nullable)  — текущий активный объект
+
+objects
+  ├── id, name, address, userId, createdAt
+  └── ... (связан с works, messages, acts, schedules и т.д.)
+```
+
+- `users.current_object_id` — серверное хранение текущего объекта. При первом обращении, если поле `NULL`, сервер автоматически создаёт дефолтный объект (`getOrCreateDefaultObject`).
+- Каскадное удаление: при удалении объекта удаляются все связанные данные (ВОР, акты, сообщения, материалы, задачи графика и т.д.).
+
+#### Квоты по тарифам
+
+| Тариф | Макс. объектов |
+|-------|---------------|
+| Basic | 1 |
+| Standard | 5 |
+| Premium | безлимит |
+
+Квота проверяется при создании объекта (`createObject`): если достигнут лимит — возвращается 403.
+
+#### API endpoints объектов
+
+- `GET /api/objects` — список объектов пользователя
+- `POST /api/objects` — создать новый объект (с проверкой квоты)
+- `GET /api/objects/:id` — получить объект
+- `PATCH /api/objects/:id` — обновить объект (только владелец)
+- `DELETE /api/objects/:id` — удалить объект с каскадом (только владелец)
+- `POST /api/objects/:id/select` — сделать объект текущим (обновляет `users.current_object_id`)
+
+#### Middleware
+
+- **`requireObjectAccess`**: проверяет, что `objectId` из запроса принадлежит текущему пользователю; возвращает 403 при чужом объекте.
+- **`resolveCurrentObject`**: определяет текущий объект пользователя; если `current_object_id = NULL` — вызывает `getOrCreateDefaultObject` и возвращает его.
+
+#### Storage-методы
+
+- `listUserObjects(userId)` — список всех объектов пользователя
+- `createObject(userId, data)` — создание с проверкой квоты
+- `deleteObject(objectId)` — каскадное удаление
+- `selectCurrentObject(userId, objectId)` — установить текущий объект
+- `getCurrentObject(userId)` — получить текущий объект (fallback: `getOrCreateDefaultObject`)
+
+#### Frontend
+
+- **Хуки**: `useObjects`, `useCreateObject`, `useUpdateObject`, `useDeleteObject`, `useSelectObject` (`client/src/hooks/use-objects.ts`)
+- **UI**: `ObjectSelector` (Sheet-панель для выбора/переключения объектов) — встроен в `Header`; `ObjectCreateDialog` — диалог создания; страница `/objects` — полный список.
+- **Заголовок**: активный `objectId` передаётся в API через заголовок `X-Object-Id` (`client/src/lib/api-headers.ts`).
+- **Инвалидация кеша**: при переключении объекта весь TanStack Query кеш инвалидируется (`queryClient.invalidateQueries()`), чтобы все данные загрузились для нового объекта.
+
 Дополнительно (задел под AI-чат):
 - `conversations` и chat-`messages` (см. `shared/schema.ts` + `server/replit_integrations/chat/*`).
 
@@ -272,6 +329,13 @@ flowchart LR
   - `POST /api/auth/link-provider` — привязка дополнительного провайдера к аккаунту (требует JWT)
   - **Примечание**: Все auth responses теперь включают поля: `tariff`, `subscriptionEndsAt`, `trialUsed`
 - **Object (MVP current)**: `GET /api/object/current`, `PATCH /api/object/current`, `GET /api/object/current/source-data`, `PUT /api/object/current/source-data`
+- **Objects (мульти-объектный режим)**:
+  - `GET /api/objects` — список объектов пользователя
+  - `POST /api/objects` — создать объект (с проверкой квоты по тарифу)
+  - `GET /api/objects/:id` — получить объект по id
+  - `PATCH /api/objects/:id` — обновить данные объекта
+  - `DELETE /api/objects/:id` — удалить объект (каскадно удаляет все связанные данные)
+  - `POST /api/objects/:id/select` — установить объект как текущий (`users.current_object_id`)
 - **Materials Catalog**: `GET /api/materials-catalog`, `POST /api/materials-catalog`, `POST /api/admin/materials-catalog/import` (массовый импорт из Excel, только для администраторов)
 - **Project Materials**: `GET /api/objects/:objectId/materials`, `POST /api/objects/:objectId/materials`, `GET /api/project-materials/:id`, `PATCH /api/project-materials/:id`, `POST /api/project-materials/:id/save-to-catalog`
 - **Material Batches**: `POST /api/project-materials/:id/batches`, `PATCH /api/material-batches/:id`, `DELETE /api/material-batches/:id` (dev-only)

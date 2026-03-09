@@ -843,23 +843,43 @@ export default function Schedule() {
       const conflictKind = actConflictData.conflictKind;
       
       if (conflictKind === "actNumberAssign" || conflictKind === "actNumberChange") {
-        // Scenario A: task entering act (no prev actNumber) or moving to act with different type
-        // Apply the act's type to this task and re-save
         const conflictTemplateId = actConflictData.currentTemplateId;
         setEditActTemplateId(conflictTemplateId ? String(conflictTemplateId) : "");
-        
-        // Close conflict dialog
+
         setActConflictDialogOpen(false);
         setActConflictData(null);
-        
-        // Show success message
+
+        const durationNum = Number(editDurationDays.trim() || "1");
+        const nextActNumber = editActNumber.trim() === "" ? null : Number(editActNumber);
+        const nextQuantity = editQuantity.trim() === "" ? null : Number(editQuantity);
+        const nextUnit = editUnit.trim() || null;
+
+        await patchTask.mutateAsync({
+          id: selectedTask.id,
+          patch: {
+            startDate: editStartDate,
+            durationDays: durationNum,
+            actNumber: nextActNumber,
+            actTemplateId: conflictTemplateId,
+            quantity: nextQuantity,
+            unit: nextUnit,
+            projectDrawings: editProjectDrawings.trim() ? editProjectDrawings : null,
+            normativeRefs: editNormativeRefs.trim() ? editNormativeRefs : null,
+            executiveSchemes: (editExecutiveSchemes ?? []).filter((s) => String(s?.title ?? "").trim().length > 0),
+            independentMaterials: editIndependentMaterials,
+            updateAllTasks: true,
+          },
+          scheduleId: scheduleId ?? undefined,
+        });
+
         toast({
-          title: language === "ru" ? "Тип акта применён" : "Act type applied",
-          description: language === "ru" 
-            ? "Тип акта из существующего акта применён к текущей работе" 
+          title: language === "ru" ? "Сохранено" : "Saved",
+          description: language === "ru"
+            ? "Тип акта из существующего акта применён к текущей работе"
             : "Act type from existing act applied to current task",
           duration: 2000,
         });
+        setEditOpen(false);
       } else {
         // Scenario: changing type for all tasks in act (templateChange)
         // Re-send request with updateAllTasks: true

@@ -1796,11 +1796,17 @@ export default function Schedule() {
                   ? "Добавить текущую работу в акт с этим типом?"
                   : "Add current task to this act with this type?"
               )}
-              {actConflictData?.conflictKind === "templateChange" && (
-                language === "ru"
-                  ? `Изменить тип для всех задач акта (ещё ${actConflictData?.otherTasksCount ?? 0} задач)?`
-                  : `Change type for all tasks in act (${actConflictData?.otherTasksCount ?? 0} more tasks)?`
-              )}
+              {actConflictData?.conflictKind === "templateChange" && (() => {
+                const newTpl = (templatesData?.templates ?? []).find(
+                  (t: any) => t.id === Number(editActTemplateId)
+                );
+                const newTplLabel = newTpl
+                  ? `${String(newTpl.code ?? "")} — ${language === "ru" ? String(newTpl.title ?? "") : String((newTpl as any).titleEn ?? newTpl.title ?? "")}`
+                  : editActTemplateId || "—";
+                return language === "ru"
+                  ? `Изменить тип для всех задач акта (ещё ${actConflictData?.otherTasksCount ?? 0} задач) на «${newTplLabel}»?`
+                  : `Change type for all tasks in act (${actConflictData?.otherTasksCount ?? 0} more tasks) to "${newTplLabel}"?`;
+              })()}
               {!actConflictData?.conflictKind && (
                 language === "ru" ? "Применить тип к текущей задаче?" : "Apply type to current task?"
               )}

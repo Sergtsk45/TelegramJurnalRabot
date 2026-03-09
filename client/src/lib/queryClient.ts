@@ -2,10 +2,28 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { getTelegramInitData } from "./telegram";
 import { getAuthToken, clearAuthToken } from "./auth";
 
+export class ApiError extends Error {
+  status: number;
+  data: unknown;
+
+  constructor(status: number, message: string, data: unknown) {
+    super(`${status}: ${message}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    let data: unknown = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+    throw new ApiError(res.status, text, data);
   }
 }
 

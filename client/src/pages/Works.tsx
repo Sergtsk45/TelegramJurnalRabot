@@ -640,8 +640,8 @@ export default function Works() {
                   </AlertDialogTitle>
                   <AlertDialogDescription>
                     {language === "ru"
-                      ? "Эта смета выбрана как источник графика работ. Если продолжить, будут удалены все задачи графика и очищены списки работ в затронутых актах. Затем смета будет удалена. После этого вы сможете выбрать новый источник на вкладке «График работ»."
-                      : "This estimate is selected as the schedule source. If you continue, all schedule tasks will be deleted and work lists in affected acts will be cleared. Then the estimate will be deleted. After that you can pick a new source on the Schedule page."}
+                      ? "Эта смета выбрана как источник графика работ. Если продолжить, будут удалены смета, график работ и все его задачи, а также очищены списки работ в затронутых актах."
+                      : "This estimate is selected as the schedule source. If you continue, the estimate, the schedule and all its tasks will be deleted, and work lists in affected acts will be cleared."}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -666,8 +666,8 @@ export default function Works() {
                           title: language === "ru" ? "Удалено" : "Deleted",
                           description:
                             language === "ru"
-                              ? "Смета удалена, график и акты сброшены"
-                              : "Estimate deleted, schedule and acts reset",
+                              ? "Смета и график работ удалены"
+                              : "Estimate and schedule deleted",
                         });
                         await estimatesQuery.refetch();
                         setSelectedEstimateId(null);
@@ -682,7 +682,7 @@ export default function Works() {
                       }
                     }}
                   >
-                    {language === "ru" ? "Удалить и сбросить" : "Delete and reset"}
+                    {language === "ru" ? "Удалить смету и график" : "Delete estimate and schedule"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

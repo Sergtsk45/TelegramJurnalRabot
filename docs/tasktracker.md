@@ -640,16 +640,17 @@
 
 ---
 
-## Задача: ВОР — удаление сметы-источника с предупреждением и сбросом графика/актов
+## Задача: ВОР — удаление сметы-источника с предупреждением и удалением графика/актов
 - **Статус**: Завершена
-- **Описание**: Если смета выбрана источником графика работ, пользователю нужно дать возможность удалить смету без ручной смены источника. При подтверждении удаления должны быть сброшены задачи графика и очищены списки работ в затронутых актах, затем смета удаляется. После этого пользователь может выбрать новый источник на экране `/schedule`.
+- **Описание**: Если смета выбрана источником графика работ, пользователю нужно дать возможность удалить смету без ручной смены источника. При подтверждении удаления удаляются задачи графика, сам график и очищаются списки работ в затронутых актах, затем смета удаляется.
 - **Шаги выполнения**:
-  - [x] Backend: расширить `storage.deleteEstimate` — опция `resetScheduleIfInUse` (сброс schedule_tasks + очистка worksData + перевод источника на ВОР)
-  - [x] Backend: `DELETE /api/estimates/:id` — поддержка query `resetSchedule=1`
+  - [x] Backend: расширить `storage.deleteEstimate` — опция `resetScheduleIfInUse` (удаление schedule_tasks + очистка worksData + удаление schedule)
+  - [x] Backend: `DELETE /api/estimates/:id` — поддержка query `resetSchedule=1`, сообщение 409 обновлено
   - [x] Frontend: `useDeleteEstimate` — флаг `resetSchedule` + проброс `status` ошибки (для 409)
   - [x] UI `/works`: диалог предупреждения при 409 и повторный delete с `resetSchedule=1`
-  - [x] Документация: `docs/changelog.md`, `docs/project.md`, `docs/tasktracker.md`
-- **Зависимости**: `server/storage.ts`, `server/routes.ts`, `client/src/hooks/use-estimates.ts`, `client/src/pages/Works.tsx`, `shared/routes.ts`
+  - [x] Изменено поведение: график теперь удаляется, а не сбрасывается на `sourceType="works"`
+  - [x] Документация: `docs/changelog.md`, `docs/tasktracker.md`
+- **Зависимости**: `server/storage.ts`, `server/routes.ts`, `client/src/hooks/use-estimates.ts`, `client/src/pages/Works.tsx`
 
 ---
 

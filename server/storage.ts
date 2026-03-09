@@ -2008,9 +2008,8 @@ export class DatabaseStorage implements IStorage {
         throw new Error("ESTIMATE_IN_USE_BY_SCHEDULE");
       }
 
-      // If explicitly requested, reset any schedules that use this estimate
-      // (same effect as changing source to "works": delete tasks and clear worksData in affected acts),
-      // then proceed with deletion.
+      // If explicitly requested, delete any schedules that use this estimate:
+      // clear worksData in affected acts, delete tasks, then delete the schedule itself.
       if (schedulesUsing.length > 0 && options?.resetScheduleIfInUse) {
         for (const s of schedulesUsing) {
           const scheduleId = s.id;
@@ -2033,14 +2032,11 @@ export class DatabaseStorage implements IStorage {
               .where(inArray(acts.actNumber, affectedActNumbers));
           }
 
-          // 3) Delete schedule tasks
+          // 3) Delete schedule tasks (no CASCADE on FK, must delete manually)
           await tx.delete(scheduleTasks).where(eq(scheduleTasks.scheduleId, scheduleId));
 
-          // 4) Reset schedule source to works
-          await tx
-            .update(schedules)
-            .set({ sourceType: "works" as any, estimateId: null })
-            .where(eq(schedules.id, scheduleId));
+          // 4) Delete the schedule itself
+          await tx.delete(schedules).where(eq(schedules.id, scheduleId));
         }
       }
 

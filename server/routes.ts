@@ -1058,7 +1058,7 @@ export async function registerRoutes(
       if (err instanceof Error && err.message === "ESTIMATE_IN_USE_BY_SCHEDULE") {
         return res.status(409).json({
           message:
-            "Нельзя удалить смету: она используется как источник графика работ. Сначала смените источник графика (на ВОР) или очистите/пересоздайте задачи графика.",
+            "Смета используется как источник графика работ. При удалении будут удалены график, все его задачи и очищены списки работ в затронутых актах.",
         });
       }
       console.error("Delete estimate failed:", err);

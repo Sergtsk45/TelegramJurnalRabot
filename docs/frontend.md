@@ -107,6 +107,16 @@ client/
 - Фиксированный заголовок (`Header`)
 - Контент с отступами под навигацию (`pb-24`)
 
+### 1.1 Foundation contract для tablet UI
+- Breakpoint contract зафиксирован в `tailwind.config.ts`: `sm=640`, `md=768`, `lg=1024`, `xl=1280`, `2xl=1536`
+- В `client/index.html` используется `viewport-fit=cover` для корректной работы safe-area на iOS/iPadOS
+- В `client/src/index.css` заведены foundation-токены shell: `--shell-header-height`, `--shell-bottom-nav-height`, `--shell-content-padding-x/y`, `--shell-content-max-width`, `--shell-font-scale`
+- Там же определены safe-area utilities `pt-safe`, `pb-safe`, `pl-safe`, `pr-safe`
+- `TelegramThemeProvider` синхронизирует `--tg-viewport-height`, `--tg-viewport-stable-height`, `--tg-viewport-width` с Telegram WebApp и очищает их в browser fallback
+- В `client/src/lib/navigation.ts` вынесен единый navigation contract: `primary`, `secondary`, `quickAction`, surface visibility intent и matching rules для active-state
+- `BottomNav` и `Header` получают navigation data из manifest и только фильтруют/рендерят нужные группы для mobile shell; `BottomNav` остаётся mobile-only (`md:hidden`), а на `md+` до появления top-nav/sidebar primary navigation временно доступна через `Header` Sheet как fallback без смены router/state
+- Active-state `source-data` покрывает связанные nested routes: `/source/materials`, `/source/materials/:id`, `/source/documents`, чтобы будущий tablet shell использовал тот же источник без отдельной логики
+
 ### 2. Анимации (Framer Motion):
 - Появление карточек
 - Плавные переходы
@@ -155,6 +165,7 @@ client/
 - Поддержка dark mode (через класс `.dark`)
 - Кастомные утилиты Tailwind
 - Адаптивные отступы для safe-area (iOS)
+- Responsive foundation-слой строится additive-подходом: mobile стили остаются базой, tablet/layout enhancements добавляются поверх них через `min-width` breakpoints
 
 ## Итог
 

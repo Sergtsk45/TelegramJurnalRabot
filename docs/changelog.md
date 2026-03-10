@@ -1,5 +1,67 @@
 # Changelog
 
+## [2026-03-10] - Унификация navigation contract для tablet UI (Sprint 1)
+
+### Добавлено
+- `client/src/lib/navigation.ts` — единый navigation manifest с разделением на `primary`, `secondary`, `quickAction`, surface visibility intent для mobile и будущего `md/lg+` shell, а также правилами active-state для nested source routes (`/source/materials`, `/source/materials/:id`, `/source/documents`)
+
+### Изменено
+- `client/src/components/BottomNav.tsx` — нижняя навигация переведена на общий navigation contract; mobile-first поведение сохранено, компонент явно скрыт на `md+`
+- `client/src/components/Header.tsx` — sheet navigation и quick action теперь читают данные из общего manifest без локальных nav-массивов; на `md+` `Header` Sheet временно даёт fallback-доступ к primary navigation до отдельного top-nav/sidebar, сохраняя browser fallback и совместимость с Telegram MiniApp
+- `client/src/lib/i18n.ts` — navigation labels расширены ключами для `quickAction` (`homeChat`) и `secondary` (`objects`, `settings`), чтобы общий manifest не зависел от hardcoded-строк в `Header`
+- `docs/project.md` и `docs/frontend.md` — зафиксирован navigation contract как часть Sprint 1 foundation shell
+
+## [2026-03-10] - Старт Sprint 1 foundation shell для tablet UI
+
+### Добавлено
+- `client/src/index.css` — foundation-level токены shell для tablet UI: safe-area переменные, `pt-safe/pb-safe/pl-safe/pr-safe`, responsive padding/height tokens и базовый viewport fallback для Telegram MiniApp и browser fallback
+
+### Изменено
+- `tailwind.config.ts` — явно зафиксирован breakpoint contract для foundation-слоя tablet UI: `sm=640`, `md=768`, `lg=1024`, `xl=1280`, `2xl=1536`
+- `client/index.html` — viewport обновлён до `viewport-fit=cover` для корректной работы safe-area на iOS/iPadOS
+- `client/src/components/Header.tsx` — sticky header теперь учитывает верхнюю и боковые safe-area без изменения текущей mobile-first композиции
+- `client/src/components/TelegramThemeProvider.tsx` — CSS-переменные `--tg-viewport-height`, `--tg-viewport-stable-height` и `--tg-viewport-width` синхронизируются с Telegram WebApp и очищаются в browser fallback
+
+## [2026-03-10] - Актуализация git-стратегии под параллельную разработку
+
+### Изменено
+- `/docs/TZfrontend/strateg.md` — стратегия приведена к реальному режиму работы: `main` остаётся основной тестируемой веткой текущего приложения, найденные баги сначала исправляются в `main`, затем нужные изменения переносятся в `feature/tablet-ui`; для нового UI зафиксирован отдельный контур тестирования и запрещена подмена основного тестового сервера веткой `feature/tablet-ui`
+
+## [2026-03-10] - Git-стратегия для tablet UI и тестового сервера
+
+### Добавлено
+- `/docs/TZfrontend/strateg.md` — отдельный регламент по работе с веткой `feature/tablet-ui`: naming веток, порядок merge, правила синхронизации с `main`, правила деплоя на тестовый сервер и порядок добавления новых экранов/кнопок по итогам тестирования
+
+### Изменено
+- `/docs/TZfrontend/README.md` — стратегия добавлена в структуру пакета `TZfrontend` и включена в рекомендуемый порядок изучения перед стартом разработки
+
+## [2026-03-10] - Спринт-план для frontend-разработчика по tablet UI
+
+### Добавлено
+- `/docs/TZfrontend/08-frontend-sprints-plan.md` — приоритизированный план внедрения tablet UI по 6 спринтам: foundation shell, auth/home/worklog, works/estimates, schedule/acts, source-data/objects/settings, admin/QA/rollout
+
+### Изменено
+- `/docs/TZfrontend/README.md` — добавлен новый главный документ для frontend-разработчика с планом работ по спринтам и обновлена структура пакета `TZfrontend`
+
+## [2026-03-10] - Пакет ТЗ для tablet UI фронтенда
+
+### Добавлено
+- `/docs/TZfrontend/README.md` — индекс пакета ТЗ, карта экранов, список обязательных исходных документов и точка входа для frontend-разработчика
+- `/docs/TZfrontend/00-development-plan.md` — детальный план подготовки и внедрения tablet UI без регрессии мобильного сценария
+- `/docs/TZfrontend/01-foundation-platform-shell.md` — platform/shell требования: breakpoints, responsive navigation, safe-area, Telegram/browser parity, state rules, accessibility, performance
+- `/docs/TZfrontend/02-auth-home-worklog.md` — ТЗ по экранам аутентификации, главной странице и журналу работ
+- `/docs/TZfrontend/03-works-estimates.md` — ТЗ по экрану ВОР/Смета, импорту Excel и реестровым представлениям
+- `/docs/TZfrontend/04-schedule-acts.md` — ТЗ по графику работ, редактору задач, subflows выбора материалов/шаблонов и экрану актов
+- `/docs/TZfrontend/05-source-data-materials-documents.md` — ТЗ по исходным данным, материалам, карточке материала и документам качества
+- `/docs/TZfrontend/06-objects-settings-admin.md` — ТЗ по управлению объектами, настройкам, админке и служебным сценариям
+- `/docs/TZfrontend/07-qa-rollout.md` — матрица тестирования, критерии качества и rollout-стратегия для tablet UI
+
+### Характеристики ТЗ
+- **Ширина фокуса**: tablet portrait и landscape, с сохранением mobile-first поведения на узких экранах
+- **Покрытие маршрутов**: `/login`, `/register`, `/`, `/worklog`, `/works`, `/schedule`, `/acts`, `/select-act-template`, `/select-task-materials`, `/source-data`, `/source/materials`, `/source/materials/:id`, `/source/documents`, `/objects`, `/settings`, `/admin/*`
+- **Фокус требований**: shell и навигация, таблицы и формы, Telegram MiniApp ограничения, browser fallback, object switching, сложные редакторы и стратегия тестирования
+- **Качество**: acceptance criteria по экранам, accessibility, performance, контроль сетевых ошибок и rollout без регрессии основного mobile UX
+
 ## [2026-03-09] - Исправление цикла конфликта типа акта при назначении номера
 
 ### Исправлено

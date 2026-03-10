@@ -24,11 +24,14 @@ export const translations = {
   en: {
     nav: {
       home: 'Home',
+      homeChat: 'Work Log (chat)',
       works: 'Works',
       worklog: 'Work Log',
       acts: 'Acts',
       schedule: 'Schedule',
-      sourceData: 'Source'
+      sourceData: 'Source',
+      objects: 'My Objects',
+      settings: 'Settings'
     },
     home: {
       title: 'Work Log',
@@ -257,11 +260,14 @@ export const translations = {
   ru: {
     nav: {
       home: 'Главная',
+      homeChat: 'Журнал работ (чат)',
       works: 'ВОР',
       worklog: 'ЖР',
       acts: 'Акты',
       schedule: 'График работ',
-      sourceData: 'Исходные'
+      sourceData: 'Исходные',
+      objects: 'Мои объекты',
+      settings: 'Настройки'
     },
     home: {
       title: 'Журнал работ',

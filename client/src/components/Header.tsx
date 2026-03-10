@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { ArrowLeft, ChevronDown, Menu, Search, Zap } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -19,6 +19,15 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { ObjectSelector } from "./ObjectSelector";
+import { cn } from "@/lib/utils";
+import { useLanguageStore, translations } from "@/lib/i18n";
+import {
+  getNavigationItemsForSurface,
+  getNavigationLabel,
+  getQuickActionForSurface,
+  isNavigationItemActive,
+  type NavigationLabels,
+} from "@/lib/navigation";
 
 interface HeaderProps {
   title: string;
@@ -47,8 +56,14 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-background border-b border-border/50">
-        <div className="max-w-md mx-auto flex h-14 items-center justify-between px-4">
+      <header className="sticky top-0 z-40 border-b border-border/50 bg-background pt-safe">
+        <div
+          className="mx-auto flex h-14 max-w-md items-center justify-between px-4"
+          style={{
+            paddingLeft: "calc(1rem + var(--safe-area-left))",
+            paddingRight: "calc(1rem + var(--safe-area-right))",
+          }}
+        >
           <LeftSlot showBack={showBack} onBack={onBack} />
 
           <div className="flex flex-col items-center flex-1 min-w-0 px-2">
@@ -91,6 +106,17 @@ function LeftSlot({
   showBack,
   onBack,
 }: Pick<HeaderProps, "showBack" | "onBack">) {
+  const [location] = useLocation();
+  const { language } = useLanguageStore();
+  const t: NavigationLabels = translations[language].nav;
+  const primaryNavigationItems = getNavigationItemsForSurface("shellPrimaryMdUp", {
+    groups: "primary",
+  });
+  const navigationItems = getNavigationItemsForSurface("headerSheetMobile", {
+    groups: "secondary",
+  });
+  const quickAction = getQuickActionForSurface("headerSheetMobile");
+
   if (showBack) {
     return (
       <Button variant="ghost" size="icon" className="-ml-2 shrink-0" onClick={onBack}>
@@ -112,22 +138,49 @@ function LeftSlot({
         <SheetHeader>
           <SheetTitle>Навигация</SheetTitle>
         </SheetHeader>
-        <nav className="mt-6 flex flex-col gap-1">
-          <Link href="/objects">
-            <Button variant="ghost" className="w-full justify-start">
-              Мои объекты
-            </Button>
-          </Link>
-          <Link href="/settings">
-            <Button variant="ghost" className="w-full justify-start">
-              Настройки
-            </Button>
-          </Link>
-          <Link href="/">
-            <Button variant="ghost" className="w-full justify-start">
-              Журнал работ (чат)
-            </Button>
-          </Link>
+        <nav className="mt-6 flex flex-col gap-4">
+          <div className="hidden flex-col gap-1 md:flex">
+            {primaryNavigationItems.map((item) => {
+              const isActive = isNavigationItemActive(item, location);
+
+              return (
+                <Link key={item.id} href={item.href}>
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
+                    className={cn("w-full justify-start", isActive && "font-semibold")}
+                  >
+                    {getNavigationLabel(item, t)}
+                  </Button>
+                </Link>
+              );
+            })}
+          </div>
+          <div className="flex flex-col gap-1">
+            {navigationItems.map((item) => {
+              const isActive = isNavigationItemActive(item, location);
+
+              return (
+                <Link key={item.id} href={item.href}>
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
+                    className={cn("w-full justify-start", isActive && "font-semibold")}
+                  >
+                    {getNavigationLabel(item, t)}
+                  </Button>
+                </Link>
+              );
+            })}
+            {quickAction && (
+              <Link href={quickAction.href}>
+                <Button
+                  variant={isNavigationItemActive(quickAction, location) ? "secondary" : "ghost"}
+                  className="w-full justify-start"
+                >
+                  {getNavigationLabel(quickAction, t)}
+                </Button>
+              </Link>
+            )}
+          </div>
         </nav>
       </SheetContent>
     </Sheet>
@@ -140,16 +193,21 @@ function RightSlot({
   showAvatar,
   showZapLink,
 }: Pick<HeaderProps, "rightAction" | "showSearch" | "showAvatar" | "showZapLink">) {
+  const { language } = useLanguageStore();
+  const t: NavigationLabels = translations[language].nav;
+  const quickAction = getQuickActionForSurface("headerQuickActionMobile");
+
   if (rightAction !== undefined) {
     return <div className="shrink-0">{rightAction}</div>;
   }
 
   return (
     <div className="flex items-center gap-1 shrink-0">
-      {showZapLink && (
-        <Link href="/">
+      {showZapLink && quickAction && (
+        <Link href={quickAction.href}>
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center cursor-pointer">
             <Zap className="h-5 w-5 text-primary-foreground" fill="currentColor" />
+            <span className="sr-only">{getNavigationLabel(quickAction, t)}</span>
           </div>
         </Link>
       )}

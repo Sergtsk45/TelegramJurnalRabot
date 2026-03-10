@@ -2,6 +2,117 @@
 
 ---
 
+## Задача: Sprint 1 foundation shell для tablet UI
+- **Статус**: В процессе
+- **Дата начала**: 2026-03-10
+- **Описание**: Стартована реальная реализация foundation-слоя tablet UI в ветке `feature/tablet-ui` без изменения бизнес-логики, auth-модели, router и state-management. Первый подэтап фиксирует responsive foundation contract, safe-area, Telegram viewport wiring и единый navigation contract как основу для дальнейшей адаптации shell/navigation.
+- **Шаги выполнения**:
+  - [x] Проанализировать `docs/TZfrontend`, `docs/project.md`, `docs/frontend.md` и Telegram-гайды
+  - [x] Декомпозировать Sprint 1 через planner и проверить архитектурное направление через senior-reviewer
+  - [x] Реализовать первый подэтап foundation contract: breakpoints, viewport-fit, safe-area utilities, shell tokens, Telegram viewport CSS vars
+  - [x] Реализовать подэтап Sprint 1: единый nav contract и подготовку shell adapters для mobile/tablet без регрессии mobile-first
+  - [ ] Реализовать следующий подэтап Sprint 1: md/lg+ layout shell adapters на базе общего navigation manifest
+  - [ ] Прогнать финальную проверку Sprint 1 foundation shell и закрыть документацию этапа
+- **Файлы**:
+  - [x] `/tailwind.config.ts`
+  - [x] `/client/index.html`
+  - [x] `/client/src/index.css`
+  - [x] `/client/src/components/Header.tsx`
+  - [x] `/client/src/components/BottomNav.tsx`
+  - [x] `/client/src/lib/navigation.ts`
+  - [x] `/client/src/lib/i18n.ts`
+  - [x] `/client/src/components/TelegramThemeProvider.tsx`
+  - [x] `/docs/changelog.md`
+  - [x] `/docs/project.md`
+  - [x] `/docs/frontend.md`
+- **Результат**: Зафиксирован foundation contract для tablet UI: явные breakpoints, safe-area utilities, `viewport-fit=cover`, синхронизация Telegram viewport CSS vars и единый navigation manifest для `BottomNav`, `Header` и будущих `md/lg+` shell adapters; на `md+` до следующего подэтапа primary navigation доступна через `Header` Sheet как безопасный fallback.
+- **Зависимости**: `docs/TZfrontend/08-frontend-sprints-plan.md`, `docs/TZfrontend/01-foundation-platform-shell.md`, `docs/project.md`, `docs/frontend.md`, Telegram WebApp API
+
+---
+
+## Задача: Актуализация git-стратегии под параллельную работу `main` и `feature/tablet-ui`
+- **Статус**: Завершена
+- **Дата начала**: 2026-03-10
+- **Дата завершения**: 2026-03-10
+- **Описание**: Стратегия в `docs/TZfrontend/strateg.md` обновлена под реальный режим разработки: `main` продолжает тестироваться и получать hotfix, а `feature/tablet-ui` развивается параллельно и синхронизируется с `main` по мере необходимости.
+- **Шаги выполнения**:
+  - [x] Проверить текущую версию `strateg.md`
+  - [x] Уточнить роли веток `main` и `feature/tablet-ui`
+  - [x] Добавить правило: баги текущего приложения сначала исправляются в `main`
+  - [x] Описать отдельный контур тестирования нового UI
+  - [x] Зафиксировать изменения в `docs/changelog.md`
+- **Файлы**:
+  - [x] `/docs/TZfrontend/strateg.md`
+  - [x] `/docs/changelog.md`
+- **Результат**: Документ стратегии теперь соответствует параллельному процессу: основной тестовый сервер остаётся на `main`, а новый UI тестируется отдельно.
+- **Зависимости**: `docs/TZfrontend/strateg.md`, текущий процесс тестирования `main`
+
+---
+
+## Задача: Git-стратегия для внедрения tablet UI
+- **Статус**: Завершена
+- **Дата начала**: 2026-03-10
+- **Дата завершения**: 2026-03-10
+- **Описание**: Создана рабочая ветка `feature/tablet-ui` и оформлена отдельная git-стратегия для проекта с правилами ветвления, merge и деплоя на тестовый сервер в процессе внедрения нового UI.
+- **Шаги выполнения**:
+  - [x] Проверить текущее состояние git-репозитория
+  - [x] Создать ветку `feature/tablet-ui`
+  - [x] Подготовить файл стратегии с правилами веток и merge
+  - [x] Описать правила деплоя на тестовый сервер
+  - [x] Добавить стратегию в `docs/TZfrontend/README.md`
+  - [x] Зафиксировать изменение в `docs/changelog.md`
+- **Файлы**:
+  - [x] `/docs/TZfrontend/strateg.md`
+  - [x] `/docs/TZfrontend/README.md`
+- **Результат**: В проекте зафиксирован единый регламент работы по tablet UI с безопасным тестовым контуром и понятным процессом добавления новых экранов и кнопок.
+- **Зависимости**: текущая ветка `feature/tablet-ui`, пакет `docs/TZfrontend`
+
+---
+
+## Задача: Подготовка спринт-плана для frontend-разработчика
+- **Статус**: Завершена
+- **Дата начала**: 2026-03-10
+- **Дата завершения**: 2026-03-10
+- **Описание**: На основе пакета `docs/TZfrontend` подготовлен приоритизированный план работ по спринтам для frontend-разработчика и тимлида. План разбивает tablet UI адаптацию на последовательные этапы внедрения с зависимостями, критериями готовности, критическим путём и рекомендациями по демо.
+- **Шаги выполнения**:
+  - [x] Проанализировать базовый roadmap и пакет ТЗ по экранам
+  - [x] Сформировать 6 спринтов с приоритизацией и зависимостями
+  - [x] Описать scope, риски, DoD и артефакты каждого спринта
+  - [x] Обновить `docs/TZfrontend/README.md`
+  - [x] Зафиксировать изменение в `docs/changelog.md`
+- **Файлы**:
+  - [x] `/docs/TZfrontend/08-frontend-sprints-plan.md`
+  - [x] `/docs/TZfrontend/README.md`
+- **Результат**: Появился отдельный операционный документ, с которого можно начинать реализацию tablet UI без повторного анализа всех ТЗ.
+- **Зависимости**: `docs/TZfrontend/00-development-plan.md`, `docs/TZfrontend/01-foundation-platform-shell.md`, `docs/TZfrontend/02-07*.md`
+
+---
+
+## Задача: Подготовка полного пакета ТЗ для tablet UI
+- **Статус**: Завершена
+- **Дата начала**: 2026-03-10
+- **Дата завершения**: 2026-03-10
+- **Описание**: Подготовлен комплект технических заданий для адаптации существующего mobile-first фронтенда под планшетный UI с учётом Telegram MiniApp, браузерного режима, навигации, state management, таблиц, форм, сложных экранов и стратегии тестирования.
+- **Шаги выполнения**:
+  - [x] Исследовать документацию, маршруты и ключевые frontend-компоненты проекта
+  - [x] Выделить архитектурные ограничения mobile-first shell и риски tablet-адаптации
+  - [x] Подготовить план и базовые platform/shell требования
+  - [x] Подготовить ТЗ по всем группам экранов в `docs/TZfrontend`
+  - [x] Обновить `docs/changelog.md`
+  - [x] Зафиксировать результат в `docs/tasktracker.md`
+- **Файлы**:
+  - [x] `/docs/TZfrontend/README.md`
+  - [x] `/docs/TZfrontend/00-development-plan.md`
+  - [x] `/docs/TZfrontend/01-foundation-platform-shell.md`
+  - [x] `/docs/TZfrontend/02-auth-home-worklog.md`
+  - [x] `/docs/TZfrontend/03-works-estimates.md`
+  - [x] `/docs/TZfrontend/04-schedule-acts.md`
+  - [x] `/docs/TZfrontend/05-source-data-materials-documents.md`
+  - [x] `/docs/TZfrontend/06-objects-settings-admin.md`
+  - [x] `/docs/TZfrontend/07-qa-rollout.md`
+- **Результат**: Создан единый пакет ТЗ по foundation-слою, всем основным экранам и QA/rollout части. Документы приведены к фактической архитектуре проекта и готовы к review фронтенд-разработчиком.
+- **Зависимости**: `docs/project.md`, `docs/frontend.md`, `docs/telegram-buttons-guide.md`, `docs/telegram-haptic-guide.md`, актуальная структура `client/src/*`
+
 ## Задача: Голосовой ввод (Voice-to-Text)
 - **Статус**: Завершена
 - **Дата начала**: 2026-03-06

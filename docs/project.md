@@ -54,6 +54,7 @@
 - **Telegram MiniApp**: Полная интеграция с Telegram WebApp API:
   - **SDK**: `telegram-web-app.js` подключен в `index.html`, инициализация через `WebApp.ready()` и `WebApp.expand()`
   - **TypeScript типы**: `client/src/types/telegram.d.ts` — полные типы для Telegram WebApp API
+  - **Viewport foundation**: `client/index.html` использует `viewport-fit=cover`; `TelegramThemeProvider` синхронизирует CSS-переменные `--tg-viewport-height`, `--tg-viewport-stable-height`, `--tg-viewport-width` для Telegram WebView с безопасным browser fallback
   - **Аутентификация**: 
     - Серверная валидация `initData` через middleware `server/middleware/telegramAuth.ts` (HMAC-SHA-256 с Bot Token)
     - Клиент автоматически передаёт `initData` в заголовке `X-Telegram-Init-Data` (см. `client/src/lib/queryClient.ts`)
@@ -69,7 +70,7 @@
     - `useTelegramMainButton()` — управление главной кнопкой действия (см. `docs/telegram-buttons-guide.md`)
     - `useTelegramBackButton()` — управление кнопкой "Назад"
     - `useTelegramHaptic()` — тактильная обратная связь (impact/notification/selectionChanged, см. `docs/telegram-haptic-guide.md`)
-  - **Тема**: `TelegramThemeProvider` автоматически применяет тему Telegram, CSS-переменные (`--tg-theme-*`)
+  - **Тема**: `TelegramThemeProvider` автоматически применяет тему Telegram, CSS-переменные (`--tg-theme-*`) и foundation viewport vars для shell-слоя
   - **Бот**: Инструкция по созданию и настройке бота в `docs/telegram-bot-setup.md`
 - **Invoice Extractor** (микросервис): Python/Flask сервис для парсинга PDF-счетов поставщиков
   - **Расположение**: `services/invoice-extractor/`
@@ -83,6 +84,9 @@
 - **Навигация UI**: основные разделы в `BottomNav`, доступ к `Settings` — через выпадающее меню "гамбургера" в `Header`.
   - Порядок вкладок `BottomNav` (слева направо): **ВОР → График работ → Акты → ЖР → Исходные**
   - **Главная** (`/`) вынесена в кнопку в правом верхнем углу `Header` (иконка микрофона).
+  - **Foundation shell (tablet UI, Sprint 1)**: в `tailwind.config.ts` зафиксирован breakpoint contract `sm/md/lg/xl/2xl`, а в `client/src/index.css` заведены shell-токены и safe-area utilities (`pt-safe`, `pb-safe`, `pl-safe`, `pr-safe`) как база для последующей tablet-адаптации без смены router/auth/state-management.
+  - **Navigation contract (Sprint 1)**: `client/src/lib/navigation.ts` содержит единый manifest для `primary` (`/works`, `/schedule`, `/acts`, `/worklog`, `/source-data`), `secondary` (`/objects`, `/settings`) и `quickAction` (`/`) c surface visibility intent для mobile и будущего `md/lg+` shell.
+  - **Shell adapters**: `BottomNav` и `Header` не хранят локальные nav-массивы, а фильтруют общий manifest по surface/group; active-state для `source-data` покрывает nested-маршруты `/source/materials`, `/source/materials/:id`, `/source/documents`. До реализации отдельного `md/lg+` shell primary navigation на широких экранах временно доступна через `Header` Sheet как browser/tablet fallback.
 
 ### Диаграмма взаимодействий
 ```mermaid

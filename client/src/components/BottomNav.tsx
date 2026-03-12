@@ -1,8 +1,10 @@
 /**
  * @file: BottomNav.tsx
- * @description: Нижняя навигация приложения — 5 вкладок по дизайн-референсу (ВОР, График, Акты, ЖР, Исходные)
+ * @description: Нижняя навигация приложения — 5 вкладок по дизайн-референсу (ВОР, График, Акты, ЖР, Исходные).
+ *   Mobile-only компонент: скрыт на md+ через md:hidden.
  * @dependencies: wouter, lucide-react, @/lib/i18n, @/lib/utils
  * @created: 2026-02-23
+ * @updated: 2026-03-13
  */
 
 import { Link, useLocation } from "wouter";

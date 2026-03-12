@@ -1,8 +1,12 @@
 /**
  * @file: ResponsiveShell.tsx
- * @description: Тонкий page-level shell adapter для tablet/desktop navigation surfaces поверх существующего navigation manifest.
+ * @description: Responsive shell wrapper — adapts layout for mobile (sm/md) and tablet/desktop (lg+).
+ *   Mobile: standard flex-col with BottomNav space.
+ *   lg+: full-width content, no BottomNav padding. Sidebar visible on lg+.
+ *   Uses CSS shell tokens (--shell-content-max-width, --shell-content-padding-x/y).
  * @dependencies: Header, BottomNav, @/lib/navigation, @/lib/i18n, wouter
  * @created: 2026-03-10
+ * @updated: 2026-03-13
  */
 
 import { type ReactNode } from "react";

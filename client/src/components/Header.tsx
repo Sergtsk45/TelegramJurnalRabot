@@ -1,13 +1,14 @@
 /**
  * @file: Header.tsx
- * @description: Вариативный хедер приложения с hamburger-меню (Sheet), кнопкой назад, subtitle, быстрой ссылкой на чат (молния), поиском и аватаром
- * @dependencies: lucide-react, @/components/ui/avatar, @/components/ui/button, @/components/ui/sheet, wouter
+ * @description: Вариативный хедер приложения с hamburger-меню (Sheet), кнопкой назад, subtitle, быстрой ссылкой на чат (молния), поиском и аватаром.
+ *   На md+ показывает горизонтальный tab bar (primary nav) и secondary dropdown в правом слоте.
+ * @dependencies: lucide-react, @/components/ui/avatar, @/components/ui/button, @/components/ui/sheet, @/components/ui/dropdown-menu, wouter
  * @created: 2026-02-23
- * @updated: 2026-03-07
+ * @updated: 2026-03-13
  */
 
 import { useState } from "react";
-import { ArrowLeft, ChevronDown, Menu, Search, Zap } from "lucide-react";
+import { ArrowLeft, ChevronDown, Menu, MoreHorizontal, Search, Zap } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,6 +19,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ObjectSelector } from "./ObjectSelector";
 import { cn } from "@/lib/utils";
 import { useLanguageStore, translations } from "@/lib/i18n";
@@ -53,14 +60,17 @@ export function Header({
   showObjectSelector = false,
 }: HeaderProps) {
   const [objectSelectorOpen, setObjectSelectorOpen] = useState(false);
+  const [location] = useLocation();
   const { language } = useLanguageStore();
   const shellT = translations[language].shell;
+  const t: NavigationLabels = translations[language].nav;
+  const primaryNavItems = getNavigationItemsForSurface("shellPrimaryMdUp", { groups: "primary" });
 
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-border/50 bg-background pt-safe">
         <div
-          className="mx-auto flex h-14 max-w-md items-center justify-between px-4"
+          className="mx-auto flex h-14 max-w-md md:max-w-none items-center justify-between px-4"
           style={{
             paddingLeft: "calc(1rem + var(--safe-area-left))",
             paddingRight: "calc(1rem + var(--safe-area-right))",
@@ -96,6 +106,36 @@ export function Header({
             showZapLink={showZapLink && !showBack}
           />
         </div>
+
+        {/* md+ horizontal primary nav tab bar */}
+        <div
+          className="hidden md:flex border-t border-border/50 overflow-x-auto scrollbar-hide"
+          data-testid="header-tab-nav"
+        >
+          <div className="flex items-stretch mx-auto w-full md:max-w-none px-2">
+            {primaryNavItems.map((item) => {
+              const isActive = isNavigationItemActive(item, location);
+              const label = getNavigationLabel(item, t);
+              const Icon = item.icon;
+
+              return (
+                <Link key={item.id} href={item.href}>
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors duration-150 min-h-[44px]",
+                      isActive
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    )}
+                  >
+                    {Icon && <Icon size={16} />}
+                    <span>{label}</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </header>
 
       {showObjectSelector && (
@@ -129,10 +169,20 @@ function LeftSlot({
 
   return (
     <>
-      <div className="hidden h-9 w-9 shrink-0 md:block" aria-hidden="true" />
+      {/* md+: app name/logo in left slot */}
+      <div className="hidden md:flex items-center shrink-0">
+        <span className="font-semibold text-base text-foreground select-none">ЖурналРабот</span>
+      </div>
+
+      {/* Mobile: hamburger sheet */}
       <Sheet>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="-ml-2 shrink-0 md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-ml-2 shrink-0 md:hidden"
+            aria-label={shellT.openMenu}
+          >
             <Menu className="h-5 w-5" />
             <span className="sr-only">{shellT.openMenu}</span>
           </Button>
@@ -182,10 +232,12 @@ function RightSlot({
   showAvatar,
   showZapLink,
 }: Pick<HeaderProps, "rightAction" | "showSearch" | "showAvatar" | "showZapLink">) {
+  const [location] = useLocation();
   const { language } = useLanguageStore();
   const t: NavigationLabels = translations[language].nav;
   const shellT = translations[language].shell;
   const quickAction = getQuickActionForSurface("headerQuickActionMobile");
+  const secondaryItems = getNavigationItemsForSurface("shellSecondaryMdUp", { groups: "secondary" });
 
   if (rightAction !== undefined) {
     return <div className="shrink-0">{rightAction}</div>;
@@ -214,6 +266,40 @@ function RightSlot({
           </Avatar>
           <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-background" />
         </div>
+      )}
+
+      {/* md+ secondary nav dropdown (Objects, Settings) */}
+      {secondaryItems.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="hidden md:inline-flex -mr-1 min-h-[44px] min-w-[44px]">
+              <MoreHorizontal className="h-5 w-5" />
+              <span className="sr-only">{shellT.navigation}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {secondaryItems.map((item) => {
+              const isActive = isNavigationItemActive(item, location);
+              const label = getNavigationLabel(item, t);
+              const Icon = item.icon;
+
+              return (
+                <DropdownMenuItem key={item.id} asChild>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-2 cursor-pointer",
+                      isActive && "font-semibold text-primary"
+                    )}
+                  >
+                    {Icon && <Icon size={16} />}
+                    <span>{label}</span>
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );

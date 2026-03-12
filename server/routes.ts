@@ -167,7 +167,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   
   // Register auth routes (login, register, JWT)
-  registerAuthRoutes(app);
+  await registerAuthRoutes(app);
   
   // Auth Middleware (new unified approach)
   const appAuth = [authMiddleware({ required: true })] as const;

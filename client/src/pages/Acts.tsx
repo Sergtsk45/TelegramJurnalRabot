@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { useActs } from "@/hooks/use-acts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -383,16 +382,16 @@ export default function Acts() {
   const handleGenerate = handleExport;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header
-        title={t.title}
-        subtitle={
-          currentObject.data?.title
-            ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObject.data.title}`
-            : undefined
-        }
-        showObjectSelector
-      />
+    <ResponsiveShell
+      className="bg-background bg-grain"
+      title={t.title}
+      subtitle={
+        currentObject.data?.title
+          ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObject.data.title}`
+          : undefined
+      }
+      showObjectSelector
+    >
 
       <div className="flex-1 px-4 py-6 pb-24 max-w-md mx-auto w-full">
         <div className="mb-3">
@@ -508,18 +507,19 @@ export default function Acts() {
         )}
       </div>
 
-      <div className="fixed bottom-20 right-4 z-40 md:right-[max(1rem,calc(50vw-220px))]">
-        <Dialog
-          open={isDialogOpen}
-          onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) setExportActId(null);
-          }}
-        >
-          <DialogContent className="sm:max-w-lg max-h-[90vh] rounded-2xl flex flex-col overflow-hidden">
-            <DialogHeader>
-              <DialogTitle>{language === "ru" ? "Экспорт АОСР" : "Export AOSR"}</DialogTitle>
-            </DialogHeader>
+      <div className="fixed inset-x-0 bottom-20 z-40 md:bottom-6 lg:left-72">
+        <div className="mx-auto flex w-full max-w-md justify-end px-4">
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) setExportActId(null);
+            }}
+          >
+            <DialogContent className="sm:max-w-lg max-h-[90vh] rounded-2xl flex flex-col overflow-hidden">
+              <DialogHeader>
+                <DialogTitle>{language === "ru" ? "Экспорт АОСР" : "Export AOSR"}</DialogTitle>
+              </DialogHeader>
             <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="py-4 space-y-4 pr-4">
                 <div className="grid gap-4 grid-cols-2">
@@ -1005,8 +1005,9 @@ export default function Acts() {
                 )}
               </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Материалы для п.3 (picker) */}
@@ -1141,7 +1142,6 @@ export default function Acts() {
         </DialogContent>
       </Dialog>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }

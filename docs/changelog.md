@@ -1,9 +1,50 @@
 # Changelog
 
+## [2026-03-12] - Dev bootstrap дефолтного admin-логина
+
+### Добавлено
+- `server/routes/auth.ts` — при старте в `NODE_ENV=development` автоматически создаётся или обновляется дефолтный email-admin для локальной проверки: `admin@admin.com / 12345678`.
+
+### Изменено
+- `client/src/pages/Login.tsx` — в dev-режиме форма логина предзаполняется дефолтными данными админа, чтобы ускорить ручную визуальную проверку ветки `feature/tablet-ui`.
+
 ## [2026-03-10] - Вертикальная прокрутка в импорте PDF-счёта материалов
 
 ### Исправлено
 - `client/src/components/materials/InvoicePreviewDialog.tsx` — в диалоге предпросмотра импорта PDF-счёта восстановлена вертикальная прокрутка длинного списка распознанных материалов; модальное окно теперь корректно ограничивает свою высоту, а внутренний список прокручивается внутри доступной области экрана.
+
+## [2026-03-10] - Responsive Shell Adapters для md/lg+ (Sprint 1 Subphase 2)
+
+### Добавлено
+- `client/src/components/ResponsiveShell.tsx` — page-level shell adapter, который рендерит `top-nav` для `md+` (primary navigation) и `sidebar` для `lg+` (secondary/quick-action pattern), читая существующий navigation manifest. Компонент не владеет auth/router/state и служит чистым presentational shell-слоем для tablet/desktop.
+
+### Изменено
+- `client/src/components/Header.tsx` — hamburger/sheet для primary navigation теперь mobile-only (`md:hidden`); на `md+` hamburger скрыт, основной доступ к навигации даёт `ResponsiveShell` top-nav. Временный fallback через `Header` Sheet на `md+` удалён.
+- `client/src/pages/SourceMaterialDetail.tsx` — подключена к `ResponsiveShell`, чтобы вложенный route `/source/materials/:id` сохранял доступ к shell navigation на `md+`.
+- `docs/project.md` и `docs/frontend.md` — зафиксирован shell-архитектура с `ResponsiveShell` и поведение navigation по breakpoints.
+
+### Зафиксировано
+- ✅ `npm run check` OK — TypeScript без ошибок.
+- ✅ `npm run build` OK — финальный бандл собран. (Старые warning'и про chunk size / import.meta / mixed dynamic import остаются и не связаны с этой задачей.)
+- ⏳ Ручная cross-device validation на реальных mobile/tablet/desktop устройствах остаётся следующей проверкой и не входила в этот кодовый подэтап.
+
+### Архитектурное резюме
+- **Sprint 1 Foundation-only**: адаптированы только shell и navigation; массовая адаптация page-content layout отложена на Sprint 2+.
+- **Navigation Contract**: единый manifest для `primary` (`/works`, `/schedule`, `/acts`, `/worklog`, `/source-data`), `secondary` (`/objects`, `/settings`), `quickAction` (`/`).
+- **Breakpoint behavior**:
+  - **mobile** (`< md`): `BottomNav` + hamburger `Header` Sheet
+  - **md** (`md..lg`): `ResponsiveShell` top-nav (горизонтальные кнопки primary)
+  - **lg+** (`>= lg`): `ResponsiveShell` top-nav + sidebar (secondary/quick-action)
+
+## [2026-03-10] - Точечные fixes по findings Sprint 1 shell/nav
+
+### Изменено
+- `client/src/components/ResponsiveShell.tsx` и `client/src/components/Header.tsx` — ссылки/кнопки в shell navigation и header quick actions переведены на корректную семантику через `Button asChild`, без изменения router/navigation contract; новые shell/header accessibility labels локализованы через `client/src/lib/i18n.ts`
+- `client/src/pages/Home.tsx`, `client/src/pages/SourceDocuments.tsx`, `client/src/pages/SourceMaterials.tsx` — закрыты точечные accessibility/UX замечания: убраны оставшиеся `Link -> Button` вложения, добавлены accessible labels для icon-only actions, а floating actions на `md+` снова привязаны к ширине page content
+- `client/src/pages/Acts.tsx` и `client/src/pages/SourceDocuments.tsx` — md+ positioning action area скорректирован так, чтобы floating action оставался привязанным к ширине page content, а не выглядел глобальным элементом viewport
+
+### Исправлено
+- `client/src/pages/Schedule.tsx` — удалён лишний `resize` listener для `isPortrait`, который больше не использовался после текущей tablet shell итерации
 
 ## [2026-03-10] - Унификация navigation contract для tablet UI (Sprint 1)
 

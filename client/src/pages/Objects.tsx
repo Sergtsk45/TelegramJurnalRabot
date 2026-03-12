@@ -29,8 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { ObjectCreateDialog } from "@/components/ObjectCreateDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useObjects, useDeleteObject, useSelectObject, useUpdateObject } from "@/hooks/use-objects";
@@ -133,8 +132,11 @@ export function Objects() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-[100dvh] bg-background">
-      <Header title="Мои объекты" showSearch={false} />
+    <ResponsiveShell
+      className="min-h-screen h-[100dvh] bg-background"
+      title="Мои объекты"
+      showSearch={false}
+    >
 
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="max-w-md mx-auto px-4 pt-4">
@@ -323,8 +325,7 @@ export function Objects() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }
 

@@ -7,8 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Header } from "@/components/Header";
-import { BottomNav } from "@/components/BottomNav";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus, Search } from "lucide-react";
@@ -88,16 +87,16 @@ export default function SourceMaterials() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-[100dvh] bg-background bg-grain">
-      <Header
-        title={language === "ru" ? "Материалы" : "Materials"}
-        subtitle={
-          currentObject.data?.title
-            ? `${language === "ru" ? "ПРОЕКТ" : "PROJECT"}: ${currentObject.data.title}`
-            : undefined
-        }
-        showObjectSelector
-      />
+    <ResponsiveShell
+      className="min-h-screen h-[100dvh] bg-background bg-grain"
+      title={language === "ru" ? "Материалы" : "Materials"}
+      subtitle={
+        currentObject.data?.title
+          ? `${language === "ru" ? "ПРОЕКТ" : "PROJECT"}: ${currentObject.data.title}`
+          : undefined
+      }
+      showObjectSelector
+    >
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">
         {/* Поиск */}
@@ -181,7 +180,7 @@ export default function SourceMaterials() {
       </div>
 
       {/* FAB */}
-      <div className="fixed bottom-20 right-4 z-40 flex items-center gap-3">
+      <div className="fixed bottom-20 right-4 z-40 flex items-center gap-3 md:bottom-6 md:right-6">
         {filter === "local" && Number.isFinite(objectId) && (
           <TariffGuard 
             feature="INVOICE_IMPORT"
@@ -196,6 +195,7 @@ export default function SourceMaterials() {
           size="icon"
           className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95"
           onClick={openWizard}
+          aria-label={language === "ru" ? "Добавить материал" : "Add material"}
         >
           <Plus className="h-6 w-6" />
         </Button>
@@ -213,7 +213,6 @@ export default function SourceMaterials() {
         </>
       ) : null}
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }

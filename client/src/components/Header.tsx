@@ -53,6 +53,8 @@ export function Header({
   showObjectSelector = false,
 }: HeaderProps) {
   const [objectSelectorOpen, setObjectSelectorOpen] = useState(false);
+  const { language } = useLanguageStore();
+  const shellT = translations[language].shell;
 
   return (
     <>
@@ -74,6 +76,7 @@ export function Header({
                   type="button"
                   className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground leading-none mt-0.5 hover:text-foreground transition-colors"
                   onClick={() => setObjectSelectorOpen(true)}
+                  aria-label={shellT.selectObject}
                 >
                   <span className="truncate max-w-[160px]">{subtitle}</span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
@@ -109,9 +112,7 @@ function LeftSlot({
   const [location] = useLocation();
   const { language } = useLanguageStore();
   const t: NavigationLabels = translations[language].nav;
-  const primaryNavigationItems = getNavigationItemsForSurface("shellPrimaryMdUp", {
-    groups: "primary",
-  });
+  const shellT = translations[language].shell;
   const navigationItems = getNavigationItemsForSurface("headerSheetMobile", {
     groups: "secondary",
   });
@@ -121,69 +122,57 @@ function LeftSlot({
     return (
       <Button variant="ghost" size="icon" className="-ml-2 shrink-0" onClick={onBack}>
         <ArrowLeft className="h-5 w-5" />
-        <span className="sr-only">Назад</span>
+        <span className="sr-only">{shellT.back}</span>
       </Button>
     );
   }
 
   return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="-ml-2 shrink-0">
-          <Menu className="h-5 w-5" />
-          <span className="sr-only">Меню</span>
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-64">
-        <SheetHeader>
-          <SheetTitle>Навигация</SheetTitle>
-        </SheetHeader>
-        <nav className="mt-6 flex flex-col gap-4">
-          <div className="hidden flex-col gap-1 md:flex">
-            {primaryNavigationItems.map((item) => {
-              const isActive = isNavigationItemActive(item, location);
-
-              return (
-                <Link key={item.id} href={item.href}>
-                  <Button
-                    variant={isActive ? "secondary" : "ghost"}
-                    className={cn("w-full justify-start", isActive && "font-semibold")}
-                  >
-                    {getNavigationLabel(item, t)}
-                  </Button>
-                </Link>
-              );
-            })}
-          </div>
-          <div className="flex flex-col gap-1">
+    <>
+      <div className="hidden h-9 w-9 shrink-0 md:block" aria-hidden="true" />
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="ghost" size="icon" className="-ml-2 shrink-0 md:hidden">
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">{shellT.openMenu}</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-64">
+          <SheetHeader>
+            <SheetTitle>{shellT.navigation}</SheetTitle>
+          </SheetHeader>
+          <nav className="mt-6 flex flex-col gap-1" aria-label={shellT.secondaryNavigation}>
             {navigationItems.map((item) => {
               const isActive = isNavigationItemActive(item, location);
 
               return (
-                <Link key={item.id} href={item.href}>
-                  <Button
-                    variant={isActive ? "secondary" : "ghost"}
-                    className={cn("w-full justify-start", isActive && "font-semibold")}
-                  >
+                <Button
+                  key={item.id}
+                  asChild
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full justify-start", isActive && "font-semibold")}
+                >
+                  <Link href={item.href}>
                     {getNavigationLabel(item, t)}
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               );
             })}
             {quickAction && (
-              <Link href={quickAction.href}>
-                <Button
-                  variant={isNavigationItemActive(quickAction, location) ? "secondary" : "ghost"}
-                  className="w-full justify-start"
-                >
+              <Button
+                asChild
+                variant={isNavigationItemActive(quickAction, location) ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <Link href={quickAction.href}>
                   {getNavigationLabel(quickAction, t)}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             )}
-          </div>
-        </nav>
-      </SheetContent>
-    </Sheet>
+          </nav>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 
@@ -195,6 +184,7 @@ function RightSlot({
 }: Pick<HeaderProps, "rightAction" | "showSearch" | "showAvatar" | "showZapLink">) {
   const { language } = useLanguageStore();
   const t: NavigationLabels = translations[language].nav;
+  const shellT = translations[language].shell;
   const quickAction = getQuickActionForSurface("headerQuickActionMobile");
 
   if (rightAction !== undefined) {
@@ -204,17 +194,17 @@ function RightSlot({
   return (
     <div className="flex items-center gap-1 shrink-0">
       {showZapLink && quickAction && (
-        <Link href={quickAction.href}>
-          <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center cursor-pointer">
+        <Button asChild size="icon" className="w-9 h-9 rounded-full">
+          <Link href={quickAction.href}>
             <Zap className="h-5 w-5 text-primary-foreground" fill="currentColor" />
             <span className="sr-only">{getNavigationLabel(quickAction, t)}</span>
-          </div>
-        </Link>
+          </Link>
+        </Button>
       )}
       {showSearch && (
         <Button variant="ghost" size="icon" className="-mr-1">
           <Search className="h-5 w-5" />
-          <span className="sr-only">Поиск</span>
+          <span className="sr-only">{shellT.search}</span>
         </Button>
       )}
       {showAvatar && (

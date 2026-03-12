@@ -7,8 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { TariffGuard } from "@/components/TariffGuard";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -170,14 +169,6 @@ export default function Schedule() {
   const [confirmationInput, setConfirmationInput] = useState("");
   const [pendingSourceType, setPendingSourceType] = useState<'works' | 'estimate' | null>(null);
   const [pendingEstimateId, setPendingEstimateId] = useState<number | null>(null);
-
-  const [isPortrait, setIsPortrait] = useState(false);
-  useEffect(() => {
-    const update = () => setIsPortrait(window.innerHeight > window.innerWidth);
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
 
   const [editOpen, setEditOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<ScheduleTask | null>(null);
@@ -938,16 +929,16 @@ export default function Schedule() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header
-        title={t.title}
-        subtitle={
-          currentObject?.title
-            ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObject.title}`
-            : undefined
-        }
-        showObjectSelector
-      />
+    <ResponsiveShell
+      className="bg-background bg-grain"
+      title={t.title}
+      subtitle={
+        currentObject?.title
+          ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObject.title}`
+          : undefined
+      }
+      showObjectSelector
+    >
 
       <div className="flex-1 px-3 py-4 pb-24 w-full max-w-none">
         <div className="max-w-5xl mx-auto w-full space-y-3">
@@ -1428,8 +1419,6 @@ export default function Schedule() {
           )}
         </div>
       </div>
-
-      <BottomNav />
 
       <Dialog open={changeSourceDialogOpen} onOpenChange={setChangeSourceDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -2001,7 +1990,7 @@ export default function Schedule() {
         onSplit={handleSplitTask}
         isSubmitting={splitTask.isPending}
       />
-    </div>
+    </ResponsiveShell>
   );
 }
 

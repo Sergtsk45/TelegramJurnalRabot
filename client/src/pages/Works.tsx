@@ -6,8 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { useWorks, useImportWorks, useClearWorks } from "@/hooks/use-works";
 import { useDeleteWorkCollection, useWorkCollection, useWorkCollections } from "@/hooks/use-work-collections";
 import { useDeleteEstimate, useEstimate, useEstimates, useImportEstimate } from "@/hooks/use-estimates";
@@ -309,11 +308,10 @@ export default function Works() {
   }, [estimatesList, selectedEstimateId]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <Header title={t.title} subtitle={objectSubtitle} showObjectSelector />
+    <ResponsiveShell title={t.title} subtitle={objectSubtitle} showObjectSelector>
 
       {/* Sticky toolbar */}
-      <div className="sticky top-14 z-30 bg-background/95 backdrop-blur border-b border-border/40 px-4 py-3 space-y-3">
+      <div className="sticky top-14 z-30 space-y-3 border-b border-border/40 bg-background/95 px-4 py-3 backdrop-blur md:top-28">
         {/* Segmented control */}
         <div className="flex rounded-xl gap-2">
           <Button
@@ -1008,7 +1006,6 @@ export default function Works() {
         )}
       </div>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }

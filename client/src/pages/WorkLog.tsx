@@ -6,8 +6,7 @@
  */
 
 import { useState } from "react";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { useSection3 } from "@/hooks/use-section3";
 import { usePatchMessage } from "@/hooks/use-messages";
 import { useLanguageStore, translations } from "@/lib/i18n";
@@ -169,11 +168,15 @@ export default function WorkLog() {
   const progress = totalSegs > 0 ? Math.round((processedSegs / totalSegs) * 100) : 0;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <Header title={t.title} subtitle={objectSubtitle} showAvatar showObjectSelector />
+    <ResponsiveShell
+      title={t.title}
+      subtitle={objectSubtitle}
+      showAvatar
+      showObjectSelector
+    >
 
       {/* Pill-табы (как в референсе) */}
-      <div className="border-b border-border/40 bg-background sticky top-14 z-20" data-testid="worklog-tabs">
+      <div className="sticky top-14 z-20 border-b border-border/40 bg-background md:top-28" data-testid="worklog-tabs">
         <div className="relative">
           <div className="flex gap-2.5 overflow-x-auto px-4 py-3 scrollbar-hide snap-x snap-mandatory">
             {TABS.map((tab) => (
@@ -605,7 +608,6 @@ export default function WorkLog() {
         )}
       </div>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }

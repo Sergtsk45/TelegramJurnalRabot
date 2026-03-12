@@ -6,8 +6,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -71,11 +70,10 @@ export default function SourceDocuments() {
   const docs = useMemo(() => (docsQuery.data ?? []) as any[], [docsQuery.data]);
 
   return (
-    <div className="flex flex-col min-h-screen h-[100dvh] bg-background bg-grain">
-      <Header title="Документы качества" />
+    <ResponsiveShell className="min-h-screen h-[100dvh] bg-background bg-grain" title="Документы качества">
 
       <div className="flex-1 overflow-hidden px-4 py-6 pb-24">
-        <div className="mb-3 sticky top-14 z-30 bg-background/95 backdrop-blur py-2 space-y-3">
+        <div className="mb-3 sticky top-14 z-30 space-y-3 bg-background/95 py-2 backdrop-blur md:top-28">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -156,93 +154,95 @@ export default function SourceDocuments() {
         )}
       </div>
 
-      <div className="fixed bottom-20 right-4 z-40 md:right-[max(1rem,calc(50vw-220px))]">
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              size="icon"
-              className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95"
-            >
-              <Plus className="h-6 w-6" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md rounded-2xl">
-            <DialogHeader>
-              <DialogTitle>Добавить документ</DialogTitle>
-            </DialogHeader>
+      <div className="fixed bottom-20 right-4 z-40 md:bottom-6 md:left-0 md:right-0 md:pointer-events-none lg:left-72">
+        <div className="md:mx-auto md:flex md:w-full md:max-w-md md:justify-end md:px-4">
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                size="icon"
+                className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 md:pointer-events-auto"
+                aria-label="Добавить документ"
+              >
+                <Plus className="h-6 w-6" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>Добавить документ</DialogTitle>
+              </DialogHeader>
 
-            <div className="space-y-4 py-2">
-              <div className="grid gap-2">
-                <Label>Тип</Label>
-                <Select value={form.docType} onValueChange={(v) => setForm((p) => ({ ...p, docType: v }))}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="certificate">certificate</SelectItem>
-                    <SelectItem value="declaration">declaration</SelectItem>
-                    <SelectItem value="passport">passport</SelectItem>
-                    <SelectItem value="protocol">protocol</SelectItem>
-                    <SelectItem value="scheme">scheme</SelectItem>
-                    <SelectItem value="other">other</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-4 py-2">
+                <div className="grid gap-2">
+                  <Label>Тип</Label>
+                  <Select value={form.docType} onValueChange={(v) => setForm((p) => ({ ...p, docType: v }))}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="certificate">certificate</SelectItem>
+                      <SelectItem value="declaration">declaration</SelectItem>
+                      <SelectItem value="passport">passport</SelectItem>
+                      <SelectItem value="protocol">protocol</SelectItem>
+                      <SelectItem value="scheme">scheme</SelectItem>
+                      <SelectItem value="other">other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Scope</Label>
+                  <Select value={form.scope} onValueChange={(v) => setForm((p) => ({ ...p, scope: v }))}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="project">project</SelectItem>
+                      <SelectItem value="global">global</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Название (опц.)</Label>
+                  <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} className="rounded-xl" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Номер</Label>
+                  <Input
+                    value={form.docNumber}
+                    onChange={(e) => setForm((p) => ({ ...p, docNumber: e.target.value }))}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Дата</Label>
+                  <Input
+                    type="date"
+                    value={form.docDate}
+                    onChange={(e) => setForm((p) => ({ ...p, docDate: e.target.value }))}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>URL файла (опц.)</Label>
+                  <Input
+                    value={form.fileUrl}
+                    onChange={(e) => setForm((p) => ({ ...p, fileUrl: e.target.value }))}
+                    className="rounded-xl"
+                  />
+                </div>
               </div>
 
-              <div className="grid gap-2">
-                <Label>Scope</Label>
-                <Select value={form.scope} onValueChange={(v) => setForm((p) => ({ ...p, scope: v }))}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="project">project</SelectItem>
-                    <SelectItem value="global">global</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Название (опц.)</Label>
-                <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} className="rounded-xl" />
-              </div>
-              <div className="grid gap-2">
-                <Label>Номер</Label>
-                <Input
-                  value={form.docNumber}
-                  onChange={(e) => setForm((p) => ({ ...p, docNumber: e.target.value }))}
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Дата</Label>
-                <Input
-                  type="date"
-                  value={form.docDate}
-                  onChange={(e) => setForm((p) => ({ ...p, docDate: e.target.value }))}
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>URL файла (опц.)</Label>
-                <Input
-                  value={form.fileUrl}
-                  onChange={(e) => setForm((p) => ({ ...p, fileUrl: e.target.value }))}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-
-            <Button onClick={submit} disabled={createDoc.isPending} className="w-full rounded-xl h-12 gap-2">
-              {createDoc.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Создать
-            </Button>
-          </DialogContent>
-        </Dialog>
+              <Button onClick={submit} disabled={createDoc.isPending} className="w-full rounded-xl h-12 gap-2">
+                {createDoc.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Создать
+              </Button>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }
 

@@ -17,6 +17,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Loader2 } from "lucide-react";
 
+const DEV_DEFAULT_LOGIN_EMAIL = "admin@admin.com";
+const DEV_DEFAULT_LOGIN_PASSWORD = "12345678";
+
 export default function Login() {
   const { language } = useLanguageStore();
   const { toast } = useToast();
@@ -24,8 +27,8 @@ export default function Login() {
   const { login, isLoading, isAuthenticated } = useAuth();
   const { isInTelegram, initData } = useTelegram();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(import.meta.env.DEV ? DEV_DEFAULT_LOGIN_EMAIL : "");
+  const [password, setPassword] = useState(import.meta.env.DEV ? DEV_DEFAULT_LOGIN_PASSWORD : "");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Редирект после успешной аутентификации

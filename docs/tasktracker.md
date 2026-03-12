@@ -2,30 +2,57 @@
 
 ---
 
+## Задача: Dev default admin для локальной визуальной проверки
+- **Статус**: Завершена
+- **Дата начала**: 2026-03-12
+- **Дата завершения**: 2026-03-12
+- **Описание**: Для быстрого локального QA ветки `feature/tablet-ui` добавлен dev-only bootstrap дефолтного email-admin и предзаполнение формы входа, чтобы можно было сразу войти в браузерной среде без ручной регистрации.
+- **Шаги выполнения**:
+  - [x] Найти текущую логику browser login и bootstrap пользователей
+  - [x] Добавить создание/обновление dev admin `admin@admin.com`
+  - [x] Предзаполнить dev-форму логина дефолтными значениями
+  - [x] Обновить документацию и подготовить повторный локальный запуск
+- **Файлы**:
+  - [x] `/server/routes/auth.ts`
+  - [x] `/server/routes.ts`
+  - [x] `/client/src/pages/Login.tsx`
+  - [x] `/docs/changelog.md`
+  - [x] `/docs/tasktracker.md`
+  - [x] `/docs/project.md`
+- **Результат**: Локальная dev-среда теперь поднимает доступный дефолтный admin-аккаунт и ускоряет ручную визуальную проверку UI после старта приложения.
+- **Зависимости**: `server/routes/auth.ts`, browser login flow, локальная PostgreSQL БД
+
+---
+
 ## Задача: Sprint 1 foundation shell для tablet UI
 - **Статус**: В процессе
 - **Дата начала**: 2026-03-10
-- **Описание**: Стартована реальная реализация foundation-слоя tablet UI в ветке `feature/tablet-ui` без изменения бизнес-логики, auth-модели, router и state-management. Первый подэтап фиксирует responsive foundation contract, safe-area, Telegram viewport wiring и единый navigation contract как основу для дальнейшей адаптации shell/navigation.
+- **Описание**: Реализация foundation-слоя tablet UI в ветке `feature/tablet-ui` без изменения бизнес-логики, auth-модели, router и state-management. Sprint 1 включает три подэтапа: foundation contract, navigation contract и md/lg+ shell adapters на базе общего manifest.
 - **Шаги выполнения**:
   - [x] Проанализировать `docs/TZfrontend`, `docs/project.md`, `docs/frontend.md` и Telegram-гайды
   - [x] Декомпозировать Sprint 1 через planner и проверить архитектурное направление через senior-reviewer
-  - [x] Реализовать первый подэтап foundation contract: breakpoints, viewport-fit, safe-area utilities, shell tokens, Telegram viewport CSS vars
-  - [x] Реализовать подэтап Sprint 1: единый nav contract и подготовку shell adapters для mobile/tablet без регрессии mobile-first
-  - [ ] Реализовать следующий подэтап Sprint 1: md/lg+ layout shell adapters на базе общего navigation manifest
-  - [ ] Прогнать финальную проверку Sprint 1 foundation shell и закрыть документацию этапа
-- **Файлы**:
-  - [x] `/tailwind.config.ts`
-  - [x] `/client/index.html`
-  - [x] `/client/src/index.css`
-  - [x] `/client/src/components/Header.tsx`
-  - [x] `/client/src/components/BottomNav.tsx`
-  - [x] `/client/src/lib/navigation.ts`
-  - [x] `/client/src/lib/i18n.ts`
-  - [x] `/client/src/components/TelegramThemeProvider.tsx`
-  - [x] `/docs/changelog.md`
-  - [x] `/docs/project.md`
-  - [x] `/docs/frontend.md`
-- **Результат**: Зафиксирован foundation contract для tablet UI: явные breakpoints, safe-area utilities, `viewport-fit=cover`, синхронизация Telegram viewport CSS vars и единый navigation manifest для `BottomNav`, `Header` и будущих `md/lg+` shell adapters; на `md+` до следующего подэтапа primary navigation доступна через `Header` Sheet как безопасный fallback.
+  - [x] **Подэтап 1**: Реализовать foundation contract: breakpoints, viewport-fit, safe-area utilities, shell tokens, Telegram viewport CSS vars
+  - [x] **Подэтап 2**: Реализовать единый nav contract и подготовку shell adapters для mobile/tablet без регрессии mobile-first
+  - [x] Закрыть findings test-runner/reviewer по shell/nav accessibility, object context и md+ FAB positioning
+  - [x] **Подэтап 3 (Sprint 1 Subphase 2)**: Реализовать md/lg+ layout shell adapters (`ResponsiveShell`) на базе существующего navigation manifest
+    - [x] UI-101: Зафиксировать surface matrix на базе existing manifest
+    - [x] UI-102: Ввести `md..lg` top-nav adapter без переноса логики в `Header`
+    - [x] UI-103: Добавить `lg+` secondary/sidebar pattern через `ResponsiveShell`
+    - [x] UI-104: Убрать временный `md+` fallback через `Header Sheet` (hamburger/sheet теперь mobile-only)
+    - [x] UI-105: Провести узкую regression-проверку shell-navigation
+  - [ ] Финальная shell-проверка: cross-device validation на mobile/tablet/desktop (опционально, может быть в отдельной задаче)
+- **Файлы (Subphase 2)**:
+  - [x] `/client/src/components/ResponsiveShell.tsx` (новый page-level shell adapter)
+  - [x] `/client/src/components/Header.tsx` (hamburger/sheet → mobile-only)
+  - [x] `/client/src/components/BottomNav.tsx` (mobile-only, no changes)
+  - [x] `/client/src/pages/*.tsx` (SourceMaterialDetail подключён к shell на md+)
+- **Результат**: 
+  - ✅ **Subphase 2 завершена**: `ResponsiveShell` даёт `top-nav` (`md+`) и `sidebar` (`lg+`) для primary/secondary navigation, читая общий manifest. 
+  - ✅ `Header` больше не даёт временный fallback через Sheet на `md+`; hamburger/sheet теперь mobile-only.
+  - ✅ `BottomNav` остаётся mobile-only.
+  - ✅ `SourceMaterialDetail` подключён к shell, вложенная `/source/materials/:id` route сохраняет навигацию на `md+`.
+  - ✅ `npm run check` OK, `npm run build` OK (старые warning'и про chunk size не связаны с этой задачей).
+  - 📝 **Ограничение**: это Sprint 1 foundation-only, без массовой адаптации экранов Sprint 2+.
 - **Зависимости**: `docs/TZfrontend/08-frontend-sprints-plan.md`, `docs/TZfrontend/01-foundation-platform-shell.md`, `docs/project.md`, `docs/frontend.md`, Telegram WebApp API
 
 ---

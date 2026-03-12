@@ -7,8 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -163,19 +162,19 @@ export default function SourceData() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-[100dvh] bg-background bg-grain">
-      <Header
-        title={t?.title ?? (language === "ru" ? "Исходные" : "Source")}
-        subtitle={
-          currentObjectQuery.data?.title
-            ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObjectQuery.data.title}`
-            : undefined
-        }
-        showObjectSelector
-      />
+    <ResponsiveShell
+      className="min-h-screen h-[100dvh] bg-background bg-grain"
+      title={t?.title ?? (language === "ru" ? "Исходные" : "Source")}
+      subtitle={
+        currentObjectQuery.data?.title
+          ? `${language === "ru" ? "ОБЪЕКТ" : "OBJECT"}: ${currentObjectQuery.data.title}`
+          : undefined
+      }
+      showObjectSelector
+    >
 
       {/* Object selector (always above parties/sections) */}
-      <div className="sticky top-14 z-30 bg-background/95 backdrop-blur border-b border-border/40">
+      <div className="sticky top-14 z-30 border-b border-border/40 bg-background/95 backdrop-blur md:top-28">
         <div className="max-w-md mx-auto px-4 py-2 space-y-2">
           <div className="flex items-center gap-2">
             <Button
@@ -462,7 +461,7 @@ export default function SourceData() {
 
       {/* Плавающая кнопка сохранения */}
       {isDirty && (
-        <div className="fixed bottom-20 left-0 right-0 flex justify-center z-40 pointer-events-none">
+        <div className="fixed bottom-20 left-0 right-0 z-40 flex justify-center pointer-events-none md:bottom-6 lg:left-72">
           <Button
             className="pointer-events-auto rounded-full px-6 shadow-lg"
             onClick={save}
@@ -853,8 +852,7 @@ export default function SourceData() {
         </DialogContent>
       </Dialog>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }
 

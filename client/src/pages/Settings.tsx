@@ -13,8 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTelegram } from "@/hooks/useTelegram";
 import { useLanguageStore, translations } from "@/lib/i18n";
 import { useAppSettings } from "@/lib/app-settings";
-import { Header } from "@/components/Header";
-import { BottomNav } from "@/components/BottomNav";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { getAuthToken } from "@/lib/auth";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
@@ -123,8 +122,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-muted/30">
-      <Header title={t.title} showBack={false} showSearch={false} />
+    <ResponsiveShell className="bg-muted/30" title={t.title} showBack={false} showSearch={false}>
 
       <div className="flex-1 pb-24">
         {/* Профиль */}
@@ -406,7 +404,6 @@ export default function Settings() {
         </div>
       </div>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }

@@ -6,8 +6,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { BottomNav } from "@/components/BottomNav";
-import { Header } from "@/components/Header";
+import { ResponsiveShell } from "@/components/ResponsiveShell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -156,8 +155,13 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background bg-grain">
-      <Header title={t.title} subtitle={objectSubtitle} showAvatar showObjectSelector />
+    <ResponsiveShell
+      title={t.title}
+      subtitle={objectSubtitle}
+      showAvatar
+      showObjectSelector
+      className="bg-background bg-grain"
+    >
 
       {/* Browser access banner (outside Telegram) */}
       {!isInTelegram && (needsAuth || hasInvalidAuth) && (
@@ -185,11 +189,11 @@ export default function Home() {
                       : "To use the app in browser (outside Telegram), please log in."}
                 </p>
                 <div className="mt-3">
-                  <Link href="/login">
-                    <Button size="sm" variant={hasInvalidAuth ? "secondary" : "default"}>
+                  <Button asChild size="sm" variant={hasInvalidAuth ? "secondary" : "default"}>
+                    <Link href="/login">
                       {language === "ru" ? "Войти" : "Log in"}
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </div>
               </AlertDescription>
             </Alert>
@@ -252,14 +256,14 @@ export default function Home() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <ScrollArea ref={scrollRef} className="flex-1 px-4 py-6 mb-36">
+      <ScrollArea ref={scrollRef} className="flex-1 px-4 py-6 mb-36 md:mb-32 lg:mb-28">
         <div className="max-w-md mx-auto min-h-[calc(100vh-12rem)] flex flex-col justify-end">
           {showOnboarding && (
             <div className="bg-card border rounded-2xl p-4 mb-6 relative shadow-sm">
               <button
                 onClick={handleDismissOnboarding}
                 className="absolute top-3 right-3 text-muted-foreground/60 hover:text-muted-foreground"
-                aria-label="Закрыть"
+                aria-label={language === "ru" ? "Закрыть подсказку" : "Dismiss onboarding"}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -313,9 +317,11 @@ export default function Home() {
                   : "Open the app in Telegram or configure an access token for browser access."}
               </p>
               <div className="mt-4">
-                <Link href="/login">
-                  <Button>{language === "ru" ? "Перейти к входу" : "Go to login"}</Button>
-                </Link>
+                <Button asChild>
+                  <Link href="/login">
+                    {language === "ru" ? "Перейти к входу" : "Go to login"}
+                  </Link>
+                </Button>
               </div>
             </div>
           ) : sortedMessages.length === 0 ? (
@@ -347,7 +353,7 @@ export default function Home() {
       </ScrollArea>
 
       {/* Панель ввода */}
-      <div className="fixed bottom-16 left-0 right-0 bg-background border-t border-border/40 px-4 pt-3 pb-3">
+      <div className="fixed bottom-16 left-0 right-0 border-t border-border/40 bg-background px-4 pt-3 pb-3 md:bottom-0 lg:left-72">
         <form onSubmit={handleSubmit} className="max-w-md mx-auto space-y-2">
           <div className="flex items-end gap-2">
             {/* Поле ввода с микрофоном внутри */}
@@ -392,6 +398,7 @@ export default function Home() {
                   onPointerDown={(e) => { e.preventDefault(); startRecording(); }}
                   onPointerUp={() => { if (isRecording) stopRecording(); }}
                   onPointerLeave={() => { if (isRecording) cancelRecording(); }}
+                  aria-label={language === "ru" ? "Голосовой ввод" : "Voice input"}
                 >
                   {isTranscribing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -408,6 +415,7 @@ export default function Home() {
               size="icon"
               className="h-11 w-11 rounded-full bg-primary hover:bg-primary/90 shadow-md shadow-primary/20 shrink-0"
               disabled={!inputValue.trim() || createMessage.isPending}
+              aria-label={language === "ru" ? "Отправить сообщение" : "Send message"}
             >
               {createMessage.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -426,7 +434,6 @@ export default function Home() {
         </form>
       </div>
 
-      <BottomNav />
-    </div>
+    </ResponsiveShell>
   );
 }

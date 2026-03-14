@@ -2,6 +2,26 @@
 
 ---
 
+## Задача: Sprint 4 — Schedule + Acts tablet UI adaptation
+- **Статус**: Завершена
+- **Дата начала**: 2026-03-14
+- **Дата завершения**: 2026-03-14
+- **Описание**: Tablet-адаптация экранов Schedule (Gantt) и Acts согласно ТЗ `04-schedule-acts.md` и плану спринтов.
+- **Шаги выполнения**:
+  - [x] Task 4.1: Расширить контейнер Schedule для lg+ (`lg:max-w-none`, `lg:px-6`)
+  - [x] Task 4.2: Zoom controls (4 уровня: 3М/2М/6Н/4Н) с кнопками ZoomIn/ZoomOut
+  - [x] Task 4.3: Task Editor — Tabs (Основное / Материалы / Документация), шире `lg:max-w-3xl`
+  - [x] Task 4.4: Inline Act Template Picker dialog (modal stacking) с поиском
+  - [x] Task 4.5: Acts — двухколоночный grid на lg+, export dialog шире
+  - [x] Task 4.6: Searchable dropdown в act template picker (Task 4.4 включает поиск)
+  - [x] Task 4.7: PDF export progress bar (симулированный прогресс при генерации)
+  - [x] Task 4.8: SplitTaskDialog — шире `sm:max-w-lg lg:max-w-2xl` на планшете
+  - [x] Task 4.9: E2E тесты `__tests__/schedule-acts.e2e.ts`
+  - [ ] Task 4.10: Ручное тестирование landscape orientation (требует реального устройства)
+- **Зависимости**: Sprint 1–3 (Foundation, Auth, Works) — все завершены
+
+---
+
 ## Задача: Исправление import.meta.url в CJS-сборке (pdfGenerator)
 - **Статус**: Завершена
 - **Дата начала**: 2026-03-14

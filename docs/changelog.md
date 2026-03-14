@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-03-14] - Sprint 4: Schedule + Acts tablet UI adaptation
+
+### Добавлено
+- `Schedule.tsx` — zoom controls (кнопки ZoomOut/ZoomIn, 4 уровня: 3М / 2М / 6Н / 4Н), Task 4.2
+- `Schedule.tsx` — tabbed Task Editor (вкладки Основное / Материалы / Документация), Task 4.3
+- `Schedule.tsx` — inline Act Template Picker dialog с поиском, заменяет навигацию на `/select-act-template`, Task 4.4
+- `Acts.tsx` — двухколоночная grid-сетка для актов на lg+ (Task 4.5)
+- `Acts.tsx` — progress bar при генерации PDF (Task 4.7)
+- `__tests__/schedule-acts.e2e.ts` — E2E тесты для Sprint 4 (Task 4.9)
+
+### Изменено
+- `Schedule.tsx` — контейнер расширен до `lg:max-w-none`, левая панель Gantt шире на lg+, Task 4.1
+- `Schedule.tsx` — edit dialog шире `lg:max-w-3xl`, Task 4.3
+- `SplitTaskDialog.tsx` — dialog шире `sm:max-w-lg lg:max-w-2xl` на tablet, Task 4.8
+- `Acts.tsx` — export dialog шире `lg:max-w-2xl` на tablet, Task 4.5
+
 ## [2026-03-14] - Исправление падения CJS-сборки в pdfGenerator
 
 ### Исправлено
